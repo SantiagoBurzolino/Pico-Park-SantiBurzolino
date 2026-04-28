@@ -1,0 +1,111 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #1a1a2e;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  font-family: "Segoe UI", sans-serif;
+}
+
+canvas {
+  display: block;
+  border-radius: 8px;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+}
+
+#panel-de-informacion {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  color: #ffffff;
+  font-size: 14px;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 12px 16px;
+  border-radius: 10px;
+  line-height: 2;
+  pointer-events: none;
+  z-index: 10;
+}
+
+#titulo-del-nivel {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: bold;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 8px 20px;
+  border-radius: 10px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.indicador-de-jugador {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.circulo-de-color-del-jugador {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+#pantalla-de-victoria {
+  position: fixed;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.82);
+  color: white;
+  font-size: 48px;
+  font-weight: bold;
+  gap: 24px;
+  z-index: 20;
+}
+
+#pantalla-de-victoria.visible {
+  display: flex;
+}
+
+#boton-para-siguiente-nivel {
+  font-size: 20px;
+  padding: 14px 36px;
+  border: none;
+  border-radius: 10px;
+  background: #2ecc71;
+  color: white;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+#boton-para-siguiente-nivel:hover {
+  transform: scale(1.07);
+}
+
+#indicador-de-llave {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #f1c40f;
+  font-size: 15px;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 8px 20px;
+  border-radius: 10px;
+  pointer-events: none;
+  z-index: 10;
+}
