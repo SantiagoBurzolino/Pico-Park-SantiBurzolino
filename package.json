@@ -2,5 +2,25 @@
   "dependencies": {
     "express": "^5.2.1",
     "socket.io": "^4.8.3"
-  }
+  },
+  "name": "pico-park-santiburzolino",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SantiagoBurzolino/Pico-Park-SantiBurzolino.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/SantiagoBurzolino/Pico-Park-SantiBurzolino/issues"
+  },
+  "homepage": "https://github.com/SantiagoBurzolino/Pico-Park-SantiBurzolino#readme"
 }

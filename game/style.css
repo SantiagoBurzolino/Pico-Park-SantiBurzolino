@@ -1,32 +1,93 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
   background-color: #1a1a2e;
   overflow: hidden;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
   font-family: "Segoe UI", sans-serif;
 }
 
-canvas {
-  display: block;
-  border-radius: 8px;
-  box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+canvas { display: block; }
+
+/* ── Pantalla de inicio ───────────────────────────────────────────────────── */
+#pantalla-de-inicio {
+  position: fixed;
+  inset: 0;
+  display: none;         /* Oculta por defecto */
+  justify-content: center;
+  align-items: center;
+  background: rgba(10, 10, 30, 0.95);
+  z-index: 30;
 }
 
+#pantalla-de-inicio.visible {
+  display: flex;         /* Se muestra cuando tiene la clase "visible" */
+}
+
+.tarjeta-de-inicio {
+  background: #16213e;
+  border-radius: 20px;
+  padding: 48px;
+  max-width: 500px;
+  width: 90%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.titulo-del-juego {
+  font-size: 48px;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.descripcion-del-juego {
+  color: #a0a0b0;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.instrucciones {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.instruccion {
+  background: rgba(255,255,255,0.05);
+  border-radius: 8px;
+  padding: 10px 16px;
+  color: #ffffff;
+  font-size: 15px;
+}
+
+#boton-de-inicio {
+  background: #e94560;
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  padding: 16px 40px;
+  font-size: 22px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: transform 0.1s, background 0.2s;
+  margin-top: 8px;
+}
+
+#boton-de-inicio:hover {
+  transform: scale(1.04);
+  background: #c0392b;
+}
+
+/* ── Paneles de info ──────────────────────────────────────────────────────── */
 #panel-de-informacion {
   position: fixed;
-  top: 16px;
-  left: 16px;
-  color: #ffffff;
+  top: 16px; left: 16px;
+  color: #fff;
   font-size: 14px;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0,0,0,0.7);
   padding: 12px 16px;
   border-radius: 10px;
   line-height: 2;
@@ -36,13 +97,25 @@ canvas {
 
 #titulo-del-nivel {
   position: fixed;
-  top: 16px;
-  left: 50%;
+  top: 16px; left: 50%;
   transform: translateX(-50%);
-  color: #ffffff;
+  color: #fff;
   font-size: 18px;
   font-weight: bold;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0,0,0,0.7);
+  padding: 8px 20px;
+  border-radius: 10px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+#indicador-de-llave {
+  position: fixed;
+  bottom: 16px; left: 50%;
+  transform: translateX(-50%);
+  color: #f1c40f;
+  font-size: 15px;
+  background: rgba(0,0,0,0.7);
   padding: 8px 20px;
   border-radius: 10px;
   pointer-events: none;
@@ -56,12 +129,12 @@ canvas {
 }
 
 .circulo-de-color-del-jugador {
-  width: 12px;
-  height: 12px;
+  width: 12px; height: 12px;
   border-radius: 50%;
   display: inline-block;
 }
 
+/* ── Pantalla de victoria ─────────────────────────────────────────────────── */
 #pantalla-de-victoria {
   position: fixed;
   inset: 0;
@@ -69,7 +142,7 @@ canvas {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  background: rgba(0, 0, 0, 0.82);
+  background: rgba(0,0,0,0.82);
   color: white;
   font-size: 48px;
   font-weight: bold;
@@ -77,9 +150,7 @@ canvas {
   z-index: 20;
 }
 
-#pantalla-de-victoria.visible {
-  display: flex;
-}
+#pantalla-de-victoria.visible { display: flex; }
 
 #boton-para-siguiente-nivel {
   font-size: 20px;
@@ -92,20 +163,4 @@ canvas {
   transition: transform 0.15s;
 }
 
-#boton-para-siguiente-nivel:hover {
-  transform: scale(1.07);
-}
-
-#indicador-de-llave {
-  position: fixed;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  color: #f1c40f;
-  font-size: 15px;
-  background: rgba(0, 0, 0, 0.7);
-  padding: 8px 20px;
-  border-radius: 10px;
-  pointer-events: none;
-  z-index: 10;
-}
+#boton-para-siguiente-nivel:hover { transform: scale(1.07); }

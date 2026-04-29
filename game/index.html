@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
@@ -7,15 +7,35 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
+
+    <!-- ── Pantalla de inicio ─────────────────────────────────────────────── -->
+    <!-- Visible por defecto. Se oculta cuando el usuario presiona "Jugar".   -->
+    <div id="pantalla-de-inicio" class="visible">
+      <div class="tarjeta-de-inicio">
+        <h1 class="titulo-del-juego">🎮 Pico Park</h1>
+        <p class="descripcion-del-juego">
+          Juego cooperativo para hasta 4 jugadores.<br/>
+          Conectá tu celular con la IP del servidor.
+        </p>
+        <div class="instrucciones">
+          <div class="instruccion">🗝️ Recogé la llave</div>
+          <div class="instruccion">🚪 Llevá a todos a la salida</div>
+          <div class="instruccion">🏆 ¡Completen los 2 niveles!</div>
+        </div>
+        <button id="boton-de-inicio">▶ Jugar</button>
+      </div>
+    </div>
+
+    <!-- ── Panel de información ───────────────────────────────────────────── -->
     <div id="panel-de-informacion">
       <div id="texto-de-ip">🖥️ Cargando...</div>
       <div id="lista-de-jugadores"></div>
     </div>
 
-    <div id="titulo-del-nivel">Nivel 1 — La Llave</div>
+    <div id="titulo-del-nivel">Nivel 1 — Alcanzá la Llave</div>
+    <div id="indicador-de-llave">🗝️ Nadie tiene la llave</div>
 
-    <div id="indicador-de-llave">🗝️ La llave no fue recogida</div>
-
+    <!-- ── Pantalla de victoria ───────────────────────────────────────────── -->
     <div id="pantalla-de-victoria">
       <span id="texto-de-victoria">🎉 ¡Nivel completado!</span>
       <button id="boton-para-siguiente-nivel">Siguiente Nivel →</button>
