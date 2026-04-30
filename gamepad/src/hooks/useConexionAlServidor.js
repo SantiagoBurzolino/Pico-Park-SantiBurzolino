@@ -2,44 +2,46 @@ import { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 
 // =============================================================================
-// useConexionAlServidor — Hook personalizado de WebSocket
+// useConexionAlServidor — Hook de WebSocket
 //
-// Responsabilidad: manejar TODA la lógica de conexión con el servidor.
-// Los componentes no saben nada de socket.io, solo usan este hook.
+// Ahora también maneja:
+// - votarNivel: el jugador vota por un nivel
+// - solicitarInicio: cualquier jugador puede iniciar el juego
+// - lobbyActivo: false cuando el juego ya empezó
 // =============================================================================
 
 const PUERTO_DEL_SERVIDOR = 3000;
 
 export function useConexionAlServidor(ipDelServidor) {
-  // useRef guarda el socket sin provocar re-renders innecesarios
   const referenciaAlSocket = useRef(null);
 
-  const [estaConectado, setEstaConectado] = useState(false);
-  const [colorAsignado, setColorAsignado] = useState(null);
-  const [juegoLleno, setJuegoLleno] = useState(false);
+  const [estaConectado,   setEstaConectado]   = useState(false);
+  const [colorAsignado,   setColorAsignado]   = useState(null);
+  const [juegoLleno,      setJuegoLleno]      = useState(false);
+  const [lobbyActivo,     setLobbyActivo]      = useState(true);
+  // estadoDeVotos guarda { votos, nivelMasVotado, totalJugadores }
+  const [estadoDeVotos,   setEstadoDeVotos]   = useState(null);
 
   useEffect(() => {
     const urlDelServidor = `http://${ipDelServidor}:${PUERTO_DEL_SERVIDOR}`;
 
     const socket = io(urlDelServidor, {
-      timeout: 5000,
+      timeout:    5000,
       transports: ["websocket"],
     });
 
     referenciaAlSocket.current = socket;
 
-    // Dentro del useEffect, después de crear el socket,
-    // reemplazá el bloque de eventos por este:
-
+    // Al conectar nos identificamos como gamepad
     socket.on("connect", () => {
-      // Le decimos al servidor que somos un gamepad, no el juego
       socket.emit("identificarse", "gamepad");
     });
 
-    socket.on("jugador_asignado", (datosDelJugador) => {
-      setColorAsignado(datosDelJugador.color);
+    socket.on("jugador_asignado", (datos) => {
+      setColorAsignado(datos.color);
       setEstaConectado(true);
       setJuegoLleno(false);
+      setLobbyActivo(true);
     });
 
     socket.on("juego_lleno", () => {
@@ -47,42 +49,78 @@ export function useConexionAlServidor(ipDelServidor) {
       setEstaConectado(false);
     });
 
+    // El servidor nos manda los votos actualizados cada vez que alguien vota
+    socket.on("actualizacion_de_votos", (datos) => {
+      setEstadoDeVotos(datos);
+    });
+
+    // El servidor nos avisa que el juego empezó → salimos del lobby
+    socket.on("lobby_cerrado", () => {
+      setLobbyActivo(false);
+    });
+
     socket.on("disconnect", () => {
       setEstaConectado(false);
       setColorAsignado(null);
+      setLobbyActivo(true);
     });
 
-    // Limpieza: cuando el componente se desmonta, cerramos el socket
     return () => {
       socket.disconnect();
     };
   }, [ipDelServidor]);
 
+  // ── Funciones que expone el hook ─────────────────────────────────────────
+
   function enviarKeydown(tecla) {
-    const socketActivo = referenciaAlSocket.current;
-    const puedeEnviar = socketActivo !== null && estaConectado;
+    const socket    = referenciaAlSocket.current;
+    const puedeEnviar = socket !== null && estaConectado;
     if (!puedeEnviar) return;
-    socketActivo.emit("keydown", tecla);
+    socket.emit("keydown", tecla);
   }
 
   function enviarKeyup(tecla) {
-    const socketActivo = referenciaAlSocket.current;
-    const puedeEnviar = socketActivo !== null && estaConectado;
+    const socket    = referenciaAlSocket.current;
+    const puedeEnviar = socket !== null && estaConectado;
     if (!puedeEnviar) return;
-    socketActivo.emit("keyup", tecla);
+    socket.emit("keyup", tecla);
+  }
+
+  /**
+   * Vota por un nivel (1 o 2).
+   * El servidor actualiza el conteo y notifica a todos.
+   */
+  function votarNivel(numeroDeNivel) {
+    const socket = referenciaAlSocket.current;
+    if (socket === null || !estaConectado) return;
+    socket.emit("votar_nivel", numeroDeNivel);
+  }
+
+  /**
+   * Solicita al servidor que inicie el juego con el nivel más votado.
+   * Cualquier jugador conectado puede hacerlo.
+   */
+  function solicitarInicio() {
+    const socket = referenciaAlSocket.current;
+    if (socket === null || !estaConectado) return;
+    socket.emit("solicitar_inicio");
   }
 
   function desconectar() {
-    const socketActivo = referenciaAlSocket.current;
-    if (socketActivo !== null) socketActivo.disconnect();
+    const socket = referenciaAlSocket.current;
+    if (socket !== null) socket.disconnect();
   }
 
   return {
     estaConectado,
     colorAsignado,
     juegoLleno,
+    lobbyActivo,
+    estadoDeVotos,
     enviarKeydown,
     enviarKeyup,
+    votarNivel,
+    solicitarInicio,
     desconectar,
   };
 }

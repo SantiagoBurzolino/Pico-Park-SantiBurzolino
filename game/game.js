@@ -3,22 +3,28 @@
 // =============================================================================
 // CONSTANTES
 // =============================================================================
-const ANCHO_DEL_CANVAS            = 1280;
-const ALTO_DEL_CANVAS             = 720;
-const GROSOR_DE_PAREDES           = 50;
-const TAMANO_DEL_JUGADOR          = 24;
-const VELOCIDAD_DE_MOVIMIENTO     = 0.006;
-const FUERZA_DE_SALTO             = 0.02;      // Aumentada para saltar obstáculos
-const VELOCIDAD_MAXIMA_HORIZONTAL = 5;
-const UMBRAL_DE_VELOCIDAD_EN_SUELO = 1.2;      // Más permisivo para detectar suelo
-const NIVEL_INICIAL               = 1;
-const CANTIDAD_TOTAL_DE_NIVELES   = 2;
+const ANCHO_DEL_CANVAS             = window.innerWidth;
+const ALTO_DEL_CANVAS              = window.innerHeight;
+const GROSOR_DE_PAREDES            = 50;
+const TAMANO_DEL_JUGADOR           = 24;
+const LADO_DEL_CUADRADO            = TAMANO_DEL_JUGADOR * 2;
+const VELOCIDAD_DE_MOVIMIENTO      = 0.006;
+const FUERZA_DE_SALTO              = 0.025;
+const VELOCIDAD_MAXIMA_HORIZONTAL  = 5;
+const UMBRAL_DE_VELOCIDAD_EN_SUELO = 1.5;
 const DISTANCIA_DE_LIGADURA_DE_LLAVE = TAMANO_DEL_JUGADOR + 18;
-const TIPO_DE_CLIENTE_JUEGO       = "juego";   // Mismo valor que en server/index.js
+const CANTIDAD_TOTAL_DE_NIVELES    = 2;
+const TIPO_DE_CLIENTE_JUEGO        = "juego";
+const COLORES_DE_JUGADORES         = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12"];
+
+// Fuerza que aplica CADA jugador sobre la caja al empujarla.
+// Si dos jugadores empujan, la fuerza se duplica automáticamente
+// porque Matter.js suma las fuerzas aplicadas en el mismo frame.
+const FUERZA_DE_EMPUJE_DE_CAJA    = 0.003;
 
 const TITULOS_DE_NIVELES = {
-  1: "Nivel 1 — Alcanzá la Llave",
-  2: "Nivel 2 — La Torre Humana",
+  1: "Nivel 1 — Buscá la Llave",
+  2: "Nivel 2 — La Torre y la Caja",
 };
 
 // =============================================================================
@@ -34,27 +40,124 @@ let renderizador;
 let ejecutorDeFisica;
 let mundoDeFisica;
 
-let nivelActual              = NIVEL_INICIAL;
-let jugadoresEnPantalla      = {};
-let inputsDeJugadores        = {};
-let llaveDelNivel            = null;
-let zonaDeSalidaDelNivel     = null;
-let jugadorQueCargarLaLlave  = null;
-let ligaduraDeLlave          = null;
-let elNivelYaTermino         = false;
-let elJuegoEstaEnCurso       = false; // false = pantalla de inicio visible
+let nivelActual             = 1;
+let nivelSeleccionado       = 1;
+let jugadoresEnPantalla     = {};
+let inputsDeJugadores       = {};
+let llaveDelNivel           = null;
+let zonaDeSalidaDelNivel    = null;
+let cuerposDePuerta         = [];   // Los bloques físicos de la puerta
+let cajaEmpujable           = null; // La caja del nivel 2
+let jugadorQueCargarLaLlave = null;
+let ligaduraDeLlave         = null;
+let elNivelYaTermino        = false;
+let elJuegoEstaEnCurso      = false;
+let nivel1Completado        = false;
 
 // =============================================================================
 // CONEXIÓN CON EL SERVIDOR
-// El juego se identifica como "juego" para que el servidor NO lo trate
-// como un gamepad y no genere un cuadrado extra en pantalla.
 // =============================================================================
 const socketDelJuego = io();
 
 socketDelJuego.on("connect", () => {
-  // Apenas conecta, le decimos al servidor que somos el juego, no un gamepad
   socketDelJuego.emit("identificarse", TIPO_DE_CLIENTE_JUEGO);
 });
+
+// =============================================================================
+// ANIMACIÓN DE FONDO — Cuadraditos flotantes en pantalla de inicio
+// =============================================================================
+const CANTIDAD_DE_CUADRADITOS_DE_FONDO = 14;
+const cuadraditosDeAnimacion = [];
+
+function inicializarAnimacionDeFondo() {
+  const canvas   = document.getElementById("canvas-de-fondo-inicio");
+  canvas.width   = window.innerWidth;
+  canvas.height  = window.innerHeight;
+  const contexto = canvas.getContext("2d");
+
+  for (let i = 0; i < CANTIDAD_DE_CUADRADITOS_DE_FONDO; i++) {
+    cuadraditosDeAnimacion.push({
+      x:        Math.random() * canvas.width,
+      y:        Math.random() * canvas.height,
+      vx:       (Math.random() - 0.5) * 1.5,
+      vy:       (Math.random() - 0.5) * 1.5,
+      lado:     Math.random() * 28 + 16,
+      color:    COLORES_DE_JUGADORES[i % COLORES_DE_JUGADORES.length],
+      opacidad: Math.random() * 0.25 + 0.08,
+    });
+  }
+
+  animarCuadraditosDeFondo(canvas, contexto);
+}
+
+function animarCuadraditosDeFondo(canvas, contexto) {
+  contexto.clearRect(0, 0, canvas.width, canvas.height);
+
+  cuadraditosDeAnimacion.forEach((cuadradito) => {
+    cuadradito.x += cuadradito.vx;
+    cuadradito.y += cuadradito.vy;
+
+    const tocaBordeDerecho   = cuadradito.x + cuadradito.lado > canvas.width;
+    const tocaBordeIzquierdo = cuadradito.x < 0;
+    const tocaBordeAbajo     = cuadradito.y + cuadradito.lado > canvas.height;
+    const tocaBordeArriba    = cuadradito.y < 0;
+
+    if (tocaBordeDerecho || tocaBordeIzquierdo) cuadradito.vx *= -1;
+    if (tocaBordeAbajo   || tocaBordeArriba)    cuadradito.vy *= -1;
+
+    contexto.globalAlpha = cuadradito.opacidad;
+    contexto.fillStyle   = cuadradito.color;
+    contexto.beginPath();
+    contexto.roundRect(cuadradito.x, cuadradito.y, cuadradito.lado, cuadradito.lado, 4);
+    contexto.fill();
+  });
+
+  contexto.globalAlpha = 1;
+
+  const pantallaEsVisible = document.getElementById("pantalla-de-inicio")
+    .classList.contains("visible");
+  if (pantallaEsVisible) {
+    requestAnimationFrame(() => animarCuadraditosDeFondo(canvas, contexto));
+  }
+}
+
+// =============================================================================
+// PANTALLA DE INICIO — Selector de niveles
+// =============================================================================
+
+// Esta función se llama desde el HTML con onclick
+function seleccionarNivel(numeroDeNivel) {
+  const esNivel2SinDesbloquear = numeroDeNivel === 2 && !nivel1Completado;
+  if (esNivel2SinDesbloquear) return;
+
+  nivelSeleccionado = numeroDeNivel;
+
+  document.querySelectorAll(".boton-de-nivel.desbloqueado").forEach((boton) => {
+    boton.style.outline = "none";
+  });
+  document.getElementById(`boton-nivel-${numeroDeNivel}`).style.outline =
+    "3px solid #ffffff";
+}
+
+function desbloquearNivel2EnPantallaDeInicio() {
+  const boton = document.getElementById("boton-nivel-2");
+  boton.classList.remove("bloqueado");
+  boton.classList.add("desbloqueado");
+  boton.textContent = "🟢 Nivel 2";
+  boton.onclick = () => seleccionarNivel(2);
+}
+
+function actualizarIndicadoresDeJugadoresEnInicio(jugadoresDelServidor) {
+  const cantidad = Object.keys(jugadoresDelServidor).length;
+  for (let i = 0; i < 4; i++) {
+    const cuadradito = document.getElementById(`cuadradito-${i}`);
+    if (i < cantidad) {
+      cuadradito.classList.add("conectado");
+    } else {
+      cuadradito.classList.remove("conectado");
+    }
+  }
+}
 
 // =============================================================================
 // NIVEL ALTO — Punto de entrada
@@ -65,42 +168,13 @@ function iniciarJuego() {
   escucharEventosDeFisica();
   escucharEventosDelServidor();
   escucharBotonDeInicio();
+  inicializarAnimacionDeFondo();
   Runner.run(ejecutorDeFisica, motorDeFisica);
   Render.run(renderizador);
-  // NO llamamos cargarNivel todavía — esperamos que el usuario presione inicio
 }
 
 // =============================================================================
-// NIVEL MEDIO — Pantalla de inicio
-// =============================================================================
-
-/**
- * Escucha el botón de inicio en el HTML.
- * Cuando el usuario lo presiona, ocultamos la pantalla de inicio
- * y cargamos el primer nivel.
- */
-function escucharBotonDeInicio() {
-  const botonDeInicio = document.getElementById("boton-de-inicio");
-  botonDeInicio.addEventListener("click", () => {
-    ocultarPantallaDeInicio();
-    elJuegoEstaEnCurso = true;
-    iniciarLoopPrincipal();
-    cargarNivel(nivelActual);
-  });
-}
-
-function ocultarPantallaDeInicio() {
-  const pantallaDeInicio = document.getElementById("pantalla-de-inicio");
-  pantallaDeInicio.classList.remove("visible");
-}
-
-function mostrarPantallaDeInicio() {
-  const pantallaDeInicio = document.getElementById("pantalla-de-inicio");
-  pantallaDeInicio.classList.add("visible");
-}
-
-// =============================================================================
-// NIVEL MEDIO — Motor y renderizador
+// NIVEL MEDIO — Motor, renderizador y pantalla de inicio
 // =============================================================================
 
 function inicializarMotorDeFisica() {
@@ -120,6 +194,28 @@ function inicializarRenderizador() {
       background: "#1a1a2e",
     },
   });
+}
+
+function escucharBotonDeInicio() {
+  document.getElementById("boton-de-inicio").addEventListener("click", () => {
+    nivelActual        = nivelSeleccionado;
+    elJuegoEstaEnCurso = true;
+    ocultarPantallaDeInicio();
+    iniciarLoopPrincipal();
+    cargarNivel(nivelActual);
+  });
+}
+
+function ocultarPantallaDeInicio() {
+  document.getElementById("pantalla-de-inicio").classList.remove("visible");
+}
+
+function mostrarPantallaDeInicio() {
+  const pantalla = document.getElementById("pantalla-de-inicio");
+  pantalla.classList.add("visible");
+  const canvas   = document.getElementById("canvas-de-fondo-inicio");
+  const contexto = canvas.getContext("2d");
+  animarCuadraditosDeFondo(canvas, contexto);
 }
 
 // =============================================================================
@@ -149,57 +245,117 @@ function limpiarMundoActual() {
   llaveDelNivel           = null;
   zonaDeSalidaDelNivel    = null;
   jugadorQueCargarLaLlave = null;
+  cuerposDePuerta         = [];
+  cajaEmpujable           = null;
 }
 
 function construirEstructuraBasicaDelMundo() {
+  // Piso visible con color
   const piso = crearCuerpoEstatico(
     ANCHO_DEL_CANVAS / 2,
-    ALTO_DEL_CANVAS + GROSOR_DE_PAREDES / 2,
-    ANCHO_DEL_CANVAS, GROSOR_DE_PAREDES, "piso", "#2c3e50"
+    ALTO_DEL_CANVAS - 10,
+    ANCHO_DEL_CANVAS, 20,
+    "piso", "#4a6fa5"
   );
   const paredIzquierda = crearCuerpoEstatico(
     -GROSOR_DE_PAREDES / 2, ALTO_DEL_CANVAS / 2,
-    GROSOR_DE_PAREDES, ALTO_DEL_CANVAS, "paredIzquierda", "#2c3e50"
+    GROSOR_DE_PAREDES, ALTO_DEL_CANVAS,
+    "paredIzquierda", "#2c3e50"
   );
   const paredDerecha = crearCuerpoEstatico(
     ANCHO_DEL_CANVAS + GROSOR_DE_PAREDES / 2, ALTO_DEL_CANVAS / 2,
-    GROSOR_DE_PAREDES, ALTO_DEL_CANVAS, "paredDerecha", "#2c3e50"
+    GROSOR_DE_PAREDES, ALTO_DEL_CANVAS,
+    "paredDerecha", "#2c3e50"
   );
   const techo = crearCuerpoEstatico(
     ANCHO_DEL_CANVAS / 2, -GROSOR_DE_PAREDES / 2,
-    ANCHO_DEL_CANVAS, GROSOR_DE_PAREDES, "techo", "#2c3e50"
+    ANCHO_DEL_CANVAS, GROSOR_DE_PAREDES,
+    "techo", "#2c3e50"
   );
   World.add(mundoDeFisica, [piso, paredIzquierda, paredDerecha, techo]);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// NIVEL 1:
+// - Los jugadores aparecen cerca de la puerta (izquierda abajo)
+// - Deben subir plataformas escalonadas para alcanzar la llave (arriba derecha)
+// - Cuando alguien tiene la llave, todos vuelven a la puerta para salir
+// - La condición se adapta a la cantidad de jugadores conectados
+// ─────────────────────────────────────────────────────────────────────────────
 function construirNivelUno() {
+  const aw = ANCHO_DEL_CANVAS; // alias para no repetir
+  const ah = ALTO_DEL_CANVAS;
+
+  // Plataformas escalonadas hacia la derecha y arriba
   const plataformas = [
-    crearPlataforma(160,  630, 260, 20, "#4a6fa5"),
-    crearPlataforma(480,  530, 200, 20, "#4a6fa5"),
-    crearPlataforma(760,  430, 200, 20, "#4a6fa5"),
-    crearPlataforma(640,  270, 240, 20, "#e67e22"),
-    crearPlataforma(1050, 530, 200, 20, "#4a6fa5"),
-    crearPlataforma(1100, 370, 180, 20, "#4a6fa5"),
+    crearPlataforma(aw * 0.20, ah * 0.75, aw * 0.16, 18, "#4a6fa5"),
+    crearPlataforma(aw * 0.38, ah * 0.63, aw * 0.14, 18, "#4a6fa5"),
+    crearPlataforma(aw * 0.55, ah * 0.51, aw * 0.14, 18, "#4a6fa5"),
+    crearPlataforma(aw * 0.72, ah * 0.39, aw * 0.14, 18, "#4a6fa5"),
+    // Plataforma naranja con la llave
+    crearPlataforma(aw * 0.88, ah * 0.27, aw * 0.14, 18, "#e67e22"),
   ];
-  llaveDelNivel        = crearLlave(640, 232);
-  const puerta         = crearDecoracionDePuerta(1185, 298);
-  zonaDeSalidaDelNivel = crearZonaDeSalida(1110, 315, 190, 95);
-  World.add(mundoDeFisica, [...plataformas, llaveDelNivel, puerta, zonaDeSalidaDelNivel]);
+
+  // Llave encima de la plataforma naranja (arriba derecha)
+  llaveDelNivel = crearLlave(aw * 0.88, ah * 0.27 - 20);
+
+  // Puerta estilo Pico Park: dos pilares + dintel, en el lado izquierdo abajo
+  // donde arrancan los jugadores. Cuando alguien tiene la llave y todos están
+  // en la zona de salida, los pilares desaparecen (se eliminan del mundo).
+  const puerta = construirPuertaEstiloPicoPark(aw * 0.07, ah * 0.88);
+
+  // Zona de salida: frente a la puerta
+  zonaDeSalidaDelNivel = crearZonaDeSalida(
+    aw * 0.07, ah * 0.915,
+    aw * 0.12, 50
+  );
+
+  World.add(mundoDeFisica, [
+    ...plataformas,
+    llaveDelNivel,
+    zonaDeSalidaDelNivel,
+  ]);
+  // Los cuerpos de la puerta se agregan por separado para poder eliminarlos
+  World.add(mundoDeFisica, puerta);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// NIVEL 2:
+// - Hay una caja empujable que se necesita para alcanzar la plataforma alta
+// - Cuantos más jugadores empujan, más rápido se mueve (suma de fuerzas)
+// - También requiere apilarse para llegar a la llave
+// ─────────────────────────────────────────────────────────────────────────────
 function construirNivelDos() {
+  const aw = ANCHO_DEL_CANVAS;
+  const ah = ALTO_DEL_CANVAS;
+
   const plataformas = [
-    crearPlataforma(200,  630, 280, 20, "#4a6fa5"),
-    crearPlataforma(640,  630, 280, 20, "#4a6fa5"),
-    crearPlataforma(1080, 630, 280, 20, "#4a6fa5"),
-    crearPlataforma(420,  460, 160, 20, "#8e44ad"),
-    crearPlataforma(860,  460, 160, 20, "#8e44ad"),
-    crearPlataforma(640,  240, 220, 20, "#c0392b"),
+    crearPlataforma(aw * 0.20, ah * 0.75, aw * 0.16, 18, "#4a6fa5"),
+    crearPlataforma(aw * 0.45, ah * 0.62, aw * 0.14, 18, "#8e44ad"),
+    crearPlataforma(aw * 0.68, ah * 0.48, aw * 0.14, 18, "#8e44ad"),
+    // Plataforma muy alta — necesita caja + apilarse
+    crearPlataforma(aw * 0.85, ah * 0.28, aw * 0.16, 18, "#c0392b"),
   ];
-  llaveDelNivel        = crearLlave(640, 202);
-  const puerta         = crearDecoracionDePuerta(1190, 565);
-  zonaDeSalidaDelNivel = crearZonaDeSalida(1110, 580, 190, 95);
-  World.add(mundoDeFisica, [...plataformas, llaveDelNivel, puerta, zonaDeSalidaDelNivel]);
+
+  // Caja empujable: es dinámica (no isStatic), los jugadores la empujan
+  cajaEmpujable = crearCajaEmpujable(aw * 0.35, ah * 0.88);
+
+  llaveDelNivel = crearLlave(aw * 0.85, ah * 0.28 - 20);
+
+  const puerta = construirPuertaEstiloPicoPark(aw * 0.07, ah * 0.88);
+
+  zonaDeSalidaDelNivel = crearZonaDeSalida(
+    aw * 0.07, ah * 0.915,
+    aw * 0.12, 50
+  );
+
+  World.add(mundoDeFisica, [
+    ...plataformas,
+    cajaEmpujable,
+    llaveDelNivel,
+    zonaDeSalidaDelNivel,
+  ]);
+  World.add(mundoDeFisica, puerta);
 }
 
 // =============================================================================
@@ -221,7 +377,7 @@ function crearPlataforma(x, y, ancho, alto, color) {
     friction: 0.8,
     render: {
       fillStyle:   color,
-      strokeStyle: "rgba(255,255,255,0.12)",
+      strokeStyle: "rgba(255,255,255,0.15)",
       lineWidth:   1,
     },
   });
@@ -240,53 +396,127 @@ function crearLlave(x, y) {
   });
 }
 
-function crearDecoracionDePuerta(x, y) {
-  return Bodies.rectangle(x, y, 24, 90, {
-    isStatic: true,
-    isSensor: true,
-    label:    "puerta",
-    render: {
-      fillStyle:   "#27ae60",
-      strokeStyle: "#1e8449",
-      lineWidth:   2,
-    },
-  });
-}
-
 function crearZonaDeSalida(x, y, ancho, alto) {
   return Bodies.rectangle(x, y, ancho, alto, {
     isStatic: true,
     isSensor: true,
     label:    "zonaDeSalida",
     render: {
-      fillStyle:   "rgba(39,174,96,0.20)",
+      fillStyle:   "rgba(39,174,96,0.30)",
       strokeStyle: "#2ecc71",
       lineWidth:   2,
     },
   });
 }
 
+/**
+ * Construye la puerta estilo Pico Park:
+ * Dos pilares verticales + un dintel horizontal arriba.
+ * Se ven como un arco/portal.
+ * Cuando el nivel se completa, los pilares se eliminan del mundo (la puerta "se abre").
+ *
+ * @param {number} xCentro - Centro horizontal de la puerta
+ * @param {number} yBase   - Base inferior de la puerta (nivel del suelo)
+ */
+function construirPuertaEstiloPicoPark(xCentro, yBase) {
+  const anchoDePilar  = 12;
+  const altoDePuerta  = 80;
+  const anchoDePuerta = 70;
+  const altoDeLintel  = 12;
+
+  // Pilar izquierdo
+  const pilarIzquierdo = Bodies.rectangle(
+    xCentro - anchoDePuerta / 2,
+    yBase - altoDePuerta / 2,
+    anchoDePilar, altoDePuerta,
+    {
+      isStatic: true,
+      label:    "puertaPilar",
+      render:   { fillStyle: "#e67e22", strokeStyle: "#d35400", lineWidth: 2 },
+    }
+  );
+
+  // Pilar derecho
+  const pilarDerecho = Bodies.rectangle(
+    xCentro + anchoDePuerta / 2,
+    yBase - altoDePuerta / 2,
+    anchoDePilar, altoDePuerta,
+    {
+      isStatic: true,
+      label:    "puertaPilar",
+      render:   { fillStyle: "#e67e22", strokeStyle: "#d35400", lineWidth: 2 },
+    }
+  );
+
+  // Dintel (la barra horizontal arriba)
+  const dintel = Bodies.rectangle(
+    xCentro,
+    yBase - altoDePuerta - altoDeLintel / 2,
+    anchoDePuerta + anchoDePilar * 2, altoDeLintel,
+    {
+      isStatic: true,
+      label:    "puertaDintel",
+      render:   { fillStyle: "#e67e22", strokeStyle: "#d35400", lineWidth: 2 },
+    }
+  );
+
+  // Guardamos los cuerpos para poder eliminarlos cuando se abra la puerta
+  cuerposDePuerta = [pilarIzquierdo, pilarDerecho, dintel];
+  return cuerposDePuerta;
+}
+
+/**
+ * "Abre" la puerta eliminando sus cuerpos del mundo físico.
+ * Se llama cuando se cumplen las condiciones de victoria.
+ */
+function abrirPuerta() {
+  cuerposDePuerta.forEach((cuerpo) => {
+    World.remove(mundoDeFisica, cuerpo);
+  });
+  cuerposDePuerta = [];
+}
+
+/**
+ * Crea la caja empujable del nivel 2.
+ * No es estática: los jugadores la pueden mover aplicando fuerzas.
+ * Cuantos más jugadores empujan, más fuerzas se suman → se mueve más rápido.
+ */
+function crearCajaEmpujable(x, y) {
+  const ladoDeLaCaja = 60;
+  return Bodies.rectangle(x, y, ladoDeLaCaja, ladoDeLaCaja, {
+    label:       "cajaEmpujable",
+    isStatic:    false,  // Puede moverse
+    friction:    0.8,
+    restitution: 0.1,
+    density:     0.003,  // Más densa que los jugadores → más difícil de mover
+    inertia:     Infinity, // Sin rotación
+    render: {
+      fillStyle:   "#795548",
+      strokeStyle: "#5d4037",
+      lineWidth:   3,
+    },
+  });
+}
+
 // =============================================================================
-// NIVEL MEDIO — Gestión de jugadores (cuadrados apilables)
+// NIVEL MEDIO — Gestión de jugadores
 // =============================================================================
 
 function agregarJugadorAlMundo(idDelJugador, colorDelJugador, indiceDeColor) {
-  const jugadorYaExiste = jugadoresEnPantalla[idDelJugador] !== undefined;
-  if (jugadorYaExiste) return;
+  if (jugadoresEnPantalla[idDelJugador] !== undefined) return;
 
-  const posicionInicialX = 80 + indiceDeColor * 75;
+  const posicionInicialX = 60 + indiceDeColor * (LADO_DEL_CUADRADO + 20);
   const posicionInicialY = ALTO_DEL_CANVAS - 80;
-  const ladoDelCuadrado  = TAMANO_DEL_JUGADOR * 2;
 
   const cuerpoDelJugador = Bodies.rectangle(
     posicionInicialX, posicionInicialY,
-    ladoDelCuadrado, ladoDelCuadrado,
+    LADO_DEL_CUADRADO, LADO_DEL_CUADRADO,
     {
       label:       `jugador_${idDelJugador}`,
       frictionAir: 0.08,
       friction:    0.6,
       restitution: 0.0,
-      inertia:     Infinity, // Sin rotación al chocar
+      inertia:     Infinity,
       render: {
         fillStyle:   colorDelJugador,
         strokeStyle: "rgba(255,255,255,0.5)",
@@ -305,34 +535,36 @@ function agregarJugadorAlMundo(idDelJugador, colorDelJugador, indiceDeColor) {
 }
 
 function eliminarJugadorDelMundo(idDelJugador) {
-  const cuerpoDelJugador = jugadoresEnPantalla[idDelJugador];
-  if (cuerpoDelJugador === undefined) return;
+  const cuerpo = jugadoresEnPantalla[idDelJugador];
+  if (cuerpo === undefined) return;
 
-  const eraElPortador = jugadorQueCargarLaLlave === idDelJugador;
-  if (eraElPortador) resetearLlave();
+  if (jugadorQueCargarLaLlave === idDelJugador) resetearLlave();
 
-  World.remove(mundoDeFisica, cuerpoDelJugador);
+  World.remove(mundoDeFisica, cuerpo);
   delete jugadoresEnPantalla[idDelJugador];
   delete inputsDeJugadores[idDelJugador];
 }
 
 function reposicionarJugadoresExistentes() {
-  Object.keys(jugadoresEnPantalla).forEach((idDelJugador, indice) => {
-    const cuerpo = jugadoresEnPantalla[idDelJugador];
-    Body.setPosition(cuerpo, { x: 80 + indice * 75, y: ALTO_DEL_CANVAS - 80 });
+  Object.keys(jugadoresEnPantalla).forEach((id, indice) => {
+    const cuerpo = jugadoresEnPantalla[id];
+    Body.setPosition(cuerpo, {
+      x: 60 + indice * (LADO_DEL_CUADRADO + 20),
+      y: ALTO_DEL_CANVAS - 80,
+    });
     Body.setVelocity(cuerpo, { x: 0, y: 0 });
   });
 }
 
 // =============================================================================
 // NIVEL MEDIO — Loop principal
-// Solo inicia cuando el usuario presiona "Jugar" en la pantalla de inicio.
 // =============================================================================
 
 function iniciarLoopPrincipal() {
   function ejecutarFrame() {
     if (!elJuegoEstaEnCurso) return;
     aplicarInputsATodosLosJugadores();
+    aplicarFuerzasEnCaja();
     verificarCondicionesDeVictoria();
     verificarJugadoresFueraDelMapa();
     requestAnimationFrame(ejecutarFrame);
@@ -341,8 +573,8 @@ function iniciarLoopPrincipal() {
 }
 
 function aplicarInputsATodosLosJugadores() {
-  Object.entries(inputsDeJugadores).forEach(([idDelJugador, inputActual]) => {
-    const cuerpo = jugadoresEnPantalla[idDelJugador];
+  Object.entries(inputsDeJugadores).forEach(([id, inputActual]) => {
+    const cuerpo = jugadoresEnPantalla[id];
     if (cuerpo === undefined) return;
 
     aplicarMovimientoHorizontal(cuerpo, inputActual);
@@ -363,39 +595,81 @@ function aplicarMovimientoHorizontal(cuerpo, inputActual) {
 function aplicarSaltoSiCorresponde(cuerpo, inputActual) {
   const estaEnElSuelo      = verificarSiJugadorEstaEnSuelo(cuerpo);
   const puedeEjecutarSalto = inputActual.salto && estaEnElSuelo;
+  if (!puedeEjecutarSalto) return;
 
-  if (puedeEjecutarSalto) {
-    Body.applyForce(cuerpo, cuerpo.position, { x: 0, y: -FUERZA_DE_SALTO });
-    inputActual.salto = false;
-  }
+  Body.applyForce(cuerpo, cuerpo.position, { x: 0, y: -FUERZA_DE_SALTO });
+  inputActual.salto = false;
 }
 
 function limitarVelocidadHorizontal(cuerpo) {
   const velocidad      = cuerpo.velocity;
   const superaElLimite = Math.abs(velocidad.x) > VELOCIDAD_MAXIMA_HORIZONTAL;
-  if (superaElLimite) {
-    Body.setVelocity(cuerpo, {
-      x: Math.sign(velocidad.x) * VELOCIDAD_MAXIMA_HORIZONTAL,
-      y: velocidad.y,
-    });
-  }
+  if (!superaElLimite) return;
+
+  Body.setVelocity(cuerpo, {
+    x: Math.sign(velocidad.x) * VELOCIDAD_MAXIMA_HORIZONTAL,
+    y: velocidad.y,
+  });
 }
 
 function verificarSiJugadorEstaEnSuelo(cuerpo) {
   return Math.abs(cuerpo.velocity.y) < UMBRAL_DE_VELOCIDAD_EN_SUELO;
 }
 
+/**
+ * Detecta qué jugadores están tocando la caja y les aplica su fuerza.
+ * La suma de fuerzas es automática: si 3 jugadores empujan a la derecha,
+ * Matter.js suma las 3 fuerzas en ese frame y la caja va más rápido.
+ * Esto cumple el criterio de evaluación de "suma de fuerzas".
+ */
+function aplicarFuerzasEnCaja() {
+  const hayCaja = cajaEmpujable !== null;
+  if (!hayCaja) return;
+
+  Object.entries(inputsDeJugadores).forEach(([id, inputActual]) => {
+    const cuerpoDelJugador = jugadoresEnPantalla[id];
+    if (cuerpoDelJugador === undefined) return;
+
+    const estaEmpujandoDerecha   = inputActual.derecha;
+    const estaEmpujandoIzquierda = inputActual.izquierda;
+
+    // Verificamos si el jugador está adyacente a la caja (tocándola)
+    const estaCercaDeLaCaja = verificarSiJugadorEstaCercaDeCaja(cuerpoDelJugador);
+    if (!estaCercaDeLaCaja) return;
+
+    if (estaEmpujandoDerecha) {
+      Body.applyForce(cajaEmpujable, cajaEmpujable.position, {
+        x: FUERZA_DE_EMPUJE_DE_CAJA, y: 0,
+      });
+    }
+    if (estaEmpujandoIzquierda) {
+      Body.applyForce(cajaEmpujable, cajaEmpujable.position, {
+        x: -FUERZA_DE_EMPUJE_DE_CAJA, y: 0,
+      });
+    }
+  });
+}
+
+/**
+ * Verifica si un jugador está lo suficientemente cerca de la caja
+ * como para empujarla. Usamos una distancia simple entre centros.
+ */
+function verificarSiJugadorEstaCercaDeCaja(cuerpoDelJugador) {
+  const DISTANCIA_DE_EMPUJE = LADO_DEL_CUADRADO + 40; // px de tolerancia
+  const dx = Math.abs(cuerpoDelJugador.position.x - cajaEmpujable.position.x);
+  const dy = Math.abs(cuerpoDelJugador.position.y - cajaEmpujable.position.y);
+  return dx < DISTANCIA_DE_EMPUJE && dy < DISTANCIA_DE_EMPUJE;
+}
+
 function verificarJugadoresFueraDelMapa() {
-  Object.keys(jugadoresEnPantalla).forEach((idDelJugador) => {
-    const cuerpo         = jugadoresEnPantalla[idDelJugador];
-    const cayoFueraDelMapa = cuerpo.position.y > ALTO_DEL_CANVAS + 120;
+  Object.keys(jugadoresEnPantalla).forEach((id) => {
+    const cuerpo          = jugadoresEnPantalla[id];
+    const cayoFueraDelMapa = cuerpo.position.y > ALTO_DEL_CANVAS + 100;
     if (!cayoFueraDelMapa) return;
 
-    Body.setPosition(cuerpo, { x: 120, y: ALTO_DEL_CANVAS - 100 });
+    Body.setPosition(cuerpo, { x: 100, y: ALTO_DEL_CANVAS - 100 });
     Body.setVelocity(cuerpo, { x: 0, y: 0 });
-
-    const eraElPortador = jugadorQueCargarLaLlave === idDelJugador;
-    if (eraElPortador) resetearLlave();
+    if (jugadorQueCargarLaLlave === id) resetearLlave();
   });
 }
 
@@ -411,12 +685,9 @@ function crearLigaduraDeLlaveConJugador(cuerpoDelPortador) {
     pointB:    { x: 0, y: 0 },
     stiffness: 1,
     length:    0,
-    render: {
-      visible:     true,
-      strokeStyle: "#f1c40f",
-      lineWidth:   2,
-    },
+    render:    { visible: true, strokeStyle: "#f1c40f", lineWidth: 2 },
   });
+
   Body.setStatic(llaveDelNivel, false);
   World.add(mundoDeFisica, nuevaLigadura);
   ligaduraDeLlave = nuevaLigadura;
@@ -435,12 +706,15 @@ function resetearLlave() {
 }
 
 function obtenerPosicionInicialDeLlave(numeroDeNivel) {
-  const posiciones = { 1: { x: 640, y: 232 }, 2: { x: 640, y: 202 } };
-  return posiciones[numeroDeNivel] || { x: 640, y: 232 };
+  const posiciones = {
+    1: { x: ANCHO_DEL_CANVAS * 0.88, y: ALTO_DEL_CANVAS * 0.27 - 20 },
+    2: { x: ANCHO_DEL_CANVAS * 0.85, y: ALTO_DEL_CANVAS * 0.28 - 20 },
+  };
+  return posiciones[numeroDeNivel] || posiciones[1];
 }
 
 // =============================================================================
-// NIVEL MEDIO — Eventos de colisión
+// NIVEL MEDIO — Colisiones
 // =============================================================================
 
 function escucharEventosDeFisica() {
@@ -458,8 +732,7 @@ function procesarColision(cuerpoA, cuerpoB) {
 }
 
 function intentarRecogerLlave(cuerpoDelJugador) {
-  const yaHayPortador = jugadorQueCargarLaLlave !== null;
-  if (yaHayPortador) return;
+  if (jugadorQueCargarLaLlave !== null) return;
 
   const idDelJugador = Object.keys(jugadoresEnPantalla).find(
     (id) => jugadoresEnPantalla[id] === cuerpoDelJugador
@@ -472,26 +745,33 @@ function intentarRecogerLlave(cuerpoDelJugador) {
 }
 
 // =============================================================================
-// NIVEL MEDIO — Condición de victoria
+// NIVEL MEDIO — Victoria
+// Condición dinámica: se adapta a cuántos jugadores hay conectados.
+// Si hay 2 jugadores, con 2 en la salida alcanza para ganar.
 // =============================================================================
 
 function verificarCondicionesDeVictoria() {
   if (elNivelYaTermino) return;
   if (Object.keys(jugadoresEnPantalla).length === 0) return;
-  if (llaveDelNivel === null || zonaDeSalidaDelNivel === null) return;
+  if (!llaveDelNivel || !zonaDeSalidaDelNivel) return;
 
   const alguienTieneLaLlave  = jugadorQueCargarLaLlave !== null;
   const todosEstanEnLaSalida = verificarSiTodosEstanEnZonaDeSalida();
 
   if (alguienTieneLaLlave && todosEstanEnLaSalida) {
     elNivelYaTermino = true;
-    activarPantallaDeVictoria();
+    abrirPuerta(); // La puerta se abre visualmente
+    if (nivelActual === 1) nivel1Completado = true;
+
+    // Pequeña pausa para que se vea la puerta abrirse antes de mostrar victoria
+    setTimeout(() => activarPantallaDeVictoria(), 800);
   }
 }
 
 function verificarSiTodosEstanEnZonaDeSalida() {
   const ids = Object.keys(jugadoresEnPantalla);
   if (ids.length === 0) return false;
+  // every() → true solo si TODOS los jugadores cumplen la condición
   return ids.every((id) =>
     verificarSiCuerpoEstaEnZona(jugadoresEnPantalla[id], zonaDeSalidaDelNivel)
   );
@@ -508,32 +788,48 @@ function verificarSiCuerpoEstaEnZona(cuerpo, zona) {
 }
 
 function activarPantallaDeVictoria() {
-  const pantalla        = document.getElementById("pantalla-de-victoria");
   const esElUltimoNivel = nivelActual === CANTIDAD_TOTAL_DE_NIVELES;
-
-  pantalla.classList.add("visible");
 
   document.getElementById("texto-de-victoria").textContent =
     esElUltimoNivel ? "🏆 ¡Juego completado!" : "🎉 ¡Nivel completado!";
 
-  document.getElementById("boton-para-siguiente-nivel").textContent =
-    esElUltimoNivel ? "Jugar de nuevo" : "Siguiente Nivel →";
-
-  document.getElementById("boton-para-siguiente-nivel").onclick = () => {
-    pantalla.classList.remove("visible");
-    nivelActual = esElUltimoNivel ? 1 : nivelActual + 1;
-    cargarNivel(nivelActual);
+  const boton = document.getElementById("boton-para-siguiente-nivel");
+  boton.textContent = esElUltimoNivel ? "Volver al inicio" : "Siguiente Nivel →";
+  boton.onclick = () => {
+    document.getElementById("pantalla-de-victoria").classList.remove("visible");
+    if (esElUltimoNivel) {
+      elJuegoEstaEnCurso = false;
+      desbloquearNivel2EnPantallaDeInicio();
+      mostrarPantallaDeInicio();
+    } else {
+      nivelActual++;
+      cargarNivel(nivelActual);
+    }
   };
+
+  document.getElementById("pantalla-de-victoria").classList.add("visible");
 }
 
 // =============================================================================
-// NIVEL MEDIO — Comunicación con el servidor
+// NIVEL MEDIO — Comunicación con servidor
 // =============================================================================
 
 function escucharEventosDelServidor() {
-  socketDelJuego.on("jugador_asignado",          manejarAsignacionDeJugador);
+  socketDelJuego.on("jugador_asignado",           manejarAsignacionDeJugador);
   socketDelJuego.on("actualizacion_de_jugadores", manejarActualizacionDeJugadores);
-  socketDelJuego.on("tick_del_juego",            manejarTickDelJuego);
+  socketDelJuego.on("tick_del_juego",             manejarTickDelJuego);
+
+  // NUEVO: el servidor nos avisa que el juego fue iniciado desde un gamepad
+  // con el nivel elegido por votación y la cantidad de jugadores
+  socketDelJuego.on("juego_iniciado", (datos) => {
+    nivelActual        = datos.nivelElegido;
+    nivelSeleccionado  = datos.nivelElegido;
+    elJuegoEstaEnCurso = true;
+
+    ocultarPantallaDeInicio();
+    iniciarLoopPrincipal();
+    cargarNivelAdaptativo(datos.nivelElegido, datos.cantidadDeJugadores);
+  });
 }
 
 function manejarAsignacionDeJugador(datosDelJugador) {
@@ -559,13 +855,13 @@ function manejarActualizacionDeJugadores(jugadoresDelServidor) {
   });
 
   actualizarPanelDeJugadores(jugadoresDelServidor);
+  actualizarIndicadoresDeJugadoresEnInicio(jugadoresDelServidor);
 }
 
 function manejarTickDelJuego(estadoDelJuego) {
   Object.keys(estadoDelJuego.jugadores).forEach((id) => {
     const inputDelServidor = estadoDelJuego.jugadores[id].input;
     if (!inputsDeJugadores[id]) return;
-
     inputsDeJugadores[id].izquierda = inputDelServidor.izquierda;
     inputsDeJugadores[id].derecha   = inputDelServidor.derecha;
     if (inputDelServidor.salto) inputsDeJugadores[id].salto = true;
@@ -579,21 +875,21 @@ function manejarTickDelJuego(estadoDelJuego) {
 function actualizarPanelDeJugadores(jugadoresDelServidor) {
   const lista = document.getElementById("lista-de-jugadores");
   lista.innerHTML = "";
-  Object.values(jugadoresDelServidor).forEach((datos, indice) => {
-    const div       = document.createElement("div");
-    div.className   = "indicador-de-jugador";
-    div.innerHTML   = `
+  Object.values(jugadoresDelServidor).forEach((datos, i) => {
+    const div     = document.createElement("div");
+    div.className = "indicador-de-jugador";
+    div.innerHTML = `
       <span class="circulo-de-color-del-jugador"
             style="background-color:${datos.color}"></span>
-      <span>Jugador ${indice + 1}</span>
+      <span>Jugador ${i + 1}</span>
     `;
     lista.appendChild(div);
   });
 }
 
-function actualizarTituloDelNivel(numeroDeNivel) {
+function actualizarTituloDelNivel(n) {
   document.getElementById("titulo-del-nivel").textContent =
-    TITULOS_DE_NIVELES[numeroDeNivel] || `Nivel ${numeroDeNivel}`;
+    TITULOS_DE_NIVELES[n] || `Nivel ${n}`;
 }
 
 function actualizarIndicadorDeLlave(idDelPortador) {
@@ -602,6 +898,122 @@ function actualizarIndicadorDeLlave(idDelPortador) {
       ? "🗝️ Nadie tiene la llave — ¡encuéntrenla!"
       : "🗝️ ¡Alguien tiene la llave! Todos a la salida 🟩";
 }
+
+// =============================================================================
+// NIVEL ADAPTATIVO
+// El nivel se construye diferente según cuántos jugadores hay conectados.
+// Menos jugadores → plataformas más juntas y accesibles
+// Más jugadores   → plataformas más separadas, requiere más cooperación
+// =============================================================================
+
+/**
+ * Decide qué versión del nivel cargar según la cantidad de jugadores.
+ * @param {number} numeroDeNivel      - 1 o 2
+ * @param {number} cantidadDeJugadores - cuántos gamepads están conectados
+ */
+function cargarNivelAdaptativo(numeroDeNivel, cantidadDeJugadores) {
+  elNivelYaTermino = false;
+  limpiarMundoActual();
+  construirEstructuraBasicaDelMundo();
+
+  if (numeroDeNivel === 1) {
+    construirNivelUnoAdaptativo(cantidadDeJugadores);
+  } else if (numeroDeNivel === 2) {
+    construirNivelDosAdaptativo(cantidadDeJugadores);
+  }
+
+  reposicionarJugadoresExistentes();
+  actualizarTituloDelNivel(numeroDeNivel);
+  actualizarIndicadorDeLlave(null);
+}
+
+/**
+ * Nivel 1 adaptativo.
+ * Con 2 jugadores: plataformas más juntas, saltos más cortos.
+ * Con 4 jugadores: plataformas más separadas, requiere más coordinación.
+ */
+function construirNivelUnoAdaptativo(cantidadDeJugadores) {
+  const aw = ANCHO_DEL_CANVAS;
+  const ah = ALTO_DEL_CANVAS;
+
+  // Con pocos jugadores las plataformas están más juntas (más fácil)
+  // Con más jugadores están más separadas (más difícil, requiere cooperación)
+  const separacionVertical   = cantidadDeJugadores <= 2 ? 0.10 : 0.12;
+  const separacionHorizontal = cantidadDeJugadores <= 2 ? 0.17 : 0.20;
+
+  const plataformas = [
+    crearPlataforma(aw * 0.15,                          ah * 0.82,                              aw * 0.16, 18, "#4a6fa5"),
+    crearPlataforma(aw * 0.15 + separacionHorizontal,   ah * 0.82 - separacionVertical,         aw * 0.14, 18, "#4a6fa5"),
+    crearPlataforma(aw * 0.15 + separacionHorizontal * 2, ah * 0.82 - separacionVertical * 2,   aw * 0.14, 18, "#4a6fa5"),
+    crearPlataforma(aw * 0.15 + separacionHorizontal * 3, ah * 0.82 - separacionVertical * 3,   aw * 0.14, 18, "#4a6fa5"),
+    // Plataforma naranja con la llave
+    crearPlataforma(aw * 0.15 + separacionHorizontal * 4, ah * 0.82 - separacionVertical * 4,   aw * 0.16, 18, "#e67e22"),
+  ];
+
+  const xDeLlave = aw * 0.15 + separacionHorizontal * 4;
+  const yDeLlave = ah * 0.82 - separacionVertical * 4 - 20;
+
+  llaveDelNivel = crearLlave(xDeLlave, yDeLlave);
+
+  const puerta = construirPuertaEstiloPicoPark(aw * 0.07, ah * 0.90);
+  zonaDeSalidaDelNivel = crearZonaDeSalida(aw * 0.07, ah * 0.925, aw * 0.12, 50);
+
+  World.add(mundoDeFisica, [...plataformas, llaveDelNivel, zonaDeSalidaDelNivel]);
+  World.add(mundoDeFisica, puerta);
+}
+
+/**
+ * Nivel 2 adaptativo con caja empujable.
+ * Con pocos jugadores la caja es más liviana y la plataforma más baja.
+ * Con más jugadores la caja es más pesada y la plataforma más alta.
+ */
+function construirNivelDosAdaptativo(cantidadDeJugadores) {
+  const aw = ANCHO_DEL_CANVAS;
+  const ah = ALTO_DEL_CANVAS;
+
+  // La altura de la plataforma con la llave varía según jugadores
+  const alturaRelativaDePlataformaAlta = cantidadDeJugadores <= 2 ? 0.35 : 0.25;
+  // La densidad de la caja varía también
+  const densidadDeLaCaja = cantidadDeJugadores <= 2 ? 0.002 : 0.004;
+
+  const plataformas = [
+    crearPlataforma(aw * 0.15, ah * 0.82, aw * 0.18, 18, "#4a6fa5"),
+    crearPlataforma(aw * 0.45, ah * 0.65, aw * 0.14, 18, "#8e44ad"),
+    crearPlataforma(aw * 0.68, ah * 0.50, aw * 0.14, 18, "#8e44ad"),
+    crearPlataforma(aw * 0.85, ah * alturaRelativaDePlataformaAlta, aw * 0.16, 18, "#c0392b"),
+  ];
+
+  cajaEmpujable = Bodies.rectangle(
+    aw * 0.35, ah * 0.88, 60, 60,
+    {
+      label:       "cajaEmpujable",
+      isStatic:    false,
+      friction:    0.8,
+      restitution: 0.1,
+      density:     densidadDeLaCaja,
+      inertia:     Infinity,
+      render: {
+        fillStyle:   "#795548",
+        strokeStyle: "#5d4037",
+        lineWidth:   3,
+      },
+    }
+  );
+
+  llaveDelNivel = crearLlave(aw * 0.85, ah * alturaRelativaDePlataformaAlta - 20);
+
+  const puerta = construirPuertaEstiloPicoPark(aw * 0.07, ah * 0.90);
+  zonaDeSalidaDelNivel = crearZonaDeSalida(aw * 0.07, ah * 0.925, aw * 0.12, 50);
+
+  World.add(mundoDeFisica, [
+    ...plataformas,
+    cajaEmpujable,
+    llaveDelNivel,
+    zonaDeSalidaDelNivel,
+  ]);
+  World.add(mundoDeFisica, puerta);
+}
+
 
 // =============================================================================
 // ARRANQUE

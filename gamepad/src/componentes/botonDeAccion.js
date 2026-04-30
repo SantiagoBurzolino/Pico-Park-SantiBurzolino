@@ -4,17 +4,15 @@ import {
   Text,
   StyleSheet,
   Animated,
+  View,
 } from "react-native";
 
 // =============================================================================
-// BotonDeAccion — Botón grande de salto (botón "A")
-//
-// Responsabilidad: detectar presión/suelta, dar feedback visual
-// animado y avisar al padre con onPresionar/onSoltar.
+// BotonDeAccion — Botón A de salto que ocupa toda la mitad derecha
 // =============================================================================
 
-const ESCALA_AL_PRESIONAR   = 0.85;
-const DURACION_DE_ANIMACION = 70;
+const ESCALA_AL_PRESIONAR   = 0.88;
+const DURACION_DE_ANIMACION = 60;
 
 export function BotonDeAccion({ onPresionar, onSoltar, estaDeshabilitado }) {
   const escalaAnimada = useRef(new Animated.Value(1)).current;
@@ -48,60 +46,64 @@ export function BotonDeAccion({ onPresionar, onSoltar, estaDeshabilitado }) {
   }
 
   return (
-    <Animated.View style={[
-      estilos.contenedor,
-      { transform: [{ scale: escalaAnimada }] },
-    ]}>
-      <TouchableOpacity
-        style={[estilos.boton, estaDeshabilitado && estilos.botonDeshabilitado]}
-        onPressIn={manejarPresion}
-        onPressOut={manejarSuelta}
-        activeOpacity={1}
-      >
-        <Text style={estilos.letraA}>A</Text>
-        <Text style={estilos.etiqueta}>SALTO</Text>
-      </TouchableOpacity>
-    </Animated.View>
+    // El View exterior ocupa todo el espacio de la mitad derecha
+    <View style={estilos.contenedorExterno}>
+      <Animated.View style={[
+        estilos.contenedorAnimado,
+        { transform: [{ scale: escalaAnimada }] },
+      ]}>
+        <TouchableOpacity
+          style={[estilos.boton, estaDeshabilitado && estilos.botonDeshabilitado]}
+          onPressIn={manejarPresion}
+          onPressOut={manejarSuelta}
+          activeOpacity={1}
+        >
+          <Text style={estilos.letraA}>A</Text>
+          <Text style={estilos.etiqueta}>SALTO</Text>
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
   );
 }
 
 const estilos = StyleSheet.create({
-  contenedor: {
-    // La sombra va en el Animated.View para que también se anime
-    shadowColor:   "#c0392b",
-    shadowOffset:  { width: 0, height: 6 },
-    shadowOpacity: 0.6,
-    shadowRadius:  10,
-    elevation:     10,
+  contenedorExterno: {
+    flex:    1,
+    padding: 8,
   },
-
+  contenedorAnimado: {
+    flex: 1,
+  },
   boton: {
-    width:           120,
-    height:          120,
-    borderRadius:    60,            // Perfecto círculo
+    flex:            1,
+    borderRadius:    20,
     backgroundColor: "#c0392b",
     justifyContent:  "center",
     alignItems:      "center",
     borderWidth:     3,
     borderColor:     "#e74c3c",
+    elevation:       8,
+    shadowColor:     "#c0392b",
+    shadowOffset:    { width: 0, height: 4 },
+    shadowOpacity:   0.5,
+    shadowRadius:    8,
   },
-
   botonDeshabilitado: {
     backgroundColor: "#1a1a1a",
     borderColor:     "#333",
+    elevation:       0,
+    shadowOpacity:   0,
   },
-
   letraA: {
     color:      "#ffffff",
-    fontSize:   42,
+    fontSize:   64,
     fontWeight: "bold",
-    lineHeight: 46,
+    lineHeight: 70,
   },
-
   etiqueta: {
-    color:      "rgba(255,255,255,0.6)",
-    fontSize:   10,
-    fontWeight: "600",
-    letterSpacing: 1,
+    color:         "rgba(255,255,255,0.6)",
+    fontSize:      14,
+    fontWeight:    "600",
+    letterSpacing: 2,
   },
 });

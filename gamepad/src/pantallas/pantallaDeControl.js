@@ -8,20 +8,17 @@ import {
   StatusBar,
 } from "react-native";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
-import { useConexionAlServidor }  from "../hooks/useConexionAlServidor";
-import { ControlDireccional }     from "../componentes/controlDireccional";
-import { BotonDeAccion }          from "../componentes/botonDeAccion";
+import { useConexionAlServidor } from "../hooks/useConexionAlServidor";
+import { ControlDireccional }    from "../componentes/controlDireccional";
+import { BotonDeAccion }         from "../componentes/botonDeAccion";
+import { PantallaDeLobbby }      from "./pantallaDeLobby";
 
 // =============================================================================
-// PantallaDeControl — Gamepad principal estilo TecoGamePad
+// PantallaDeControl — Orquestador del gamepad
 //
-// Responsabilidad: mostrar el control en landscape (horizontal),
-// conectar los componentes con el hook de WebSocket y mantener
-// la pantalla encendida mientras se juega.
-//
-// Layout:
-//   Izquierda → D-Pad (izquierda / derecha)
-//   Derecha   → Botón A (salto)
+// Responsabilidad: decidir qué mostrar según el estado de conexión:
+// - Si está en lobby → muestra PantallaDeLobbby (votación + inicio)
+// - Si el juego empezó → muestra los controles (D-Pad + botón A)
 // =============================================================================
 
 export function PantallaDeControl({ ipDelServidor, onDesconexion }) {
@@ -29,220 +26,172 @@ export function PantallaDeControl({ ipDelServidor, onDesconexion }) {
     estaConectado,
     colorAsignado,
     juegoLleno,
+    lobbyActivo,
+    estadoDeVotos,
     enviarKeydown,
     enviarKeyup,
+    votarNivel,
+    solicitarInicio,
     desconectar,
   } = useConexionAlServidor(ipDelServidor);
 
-  // Wake Lock: evita que la pantalla se apague mientras se juega.
-  // Se activa al montar el componente y se desactiva al desmontarlo.
+  // Wake Lock: pantalla siempre encendida mientras se juega
   useEffect(() => {
     activateKeepAwakeAsync();
     return () => deactivateKeepAwake();
   }, []);
-
-  // ── Handlers ────────────────────────────────────────────────────────────────
-
-  function manejarPresionDireccion(direccion) {
-    enviarKeydown(direccion);
-  }
-
-  function manejarSueltaDireccion(direccion) {
-    enviarKeyup(direccion);
-  }
-
-  function manejarPresionDeSalto() {
-    enviarKeydown("salto");
-  }
-
-  function manejarSueltaDeSalto() {
-    enviarKeyup("salto");
-  }
 
   function manejarDesconexion() {
     desconectar();
     onDesconexion();
   }
 
-  // ── Estado de conexión para el indicador visual ──────────────────────────────
-  const colorDelIndicador = estaConectado ? "#2ecc71" : juegoLleno ? "#f39c12" : "#e74c3c";
-  const textoDeEstado     = juegoLleno
-    ? "⚠️ Juego lleno"
-    : estaConectado
-      ? "● Conectado"
-      : "● Conectando...";
+  // Si el lobby está activo, mostramos la pantalla de votación
+  if (lobbyActivo) {
+    return (
+      <PantallaDeLobbby
+        estaConectado={estaConectado}
+        colorAsignado={colorAsignado}
+        juegoLleno={juegoLleno}
+        estadoDeVotos={estadoDeVotos}
+        onVotarNivel={votarNivel}
+        onIniciarJuego={solicitarInicio}
+        onDesconexion={manejarDesconexion}
+        ipDelServidor={ipDelServidor}
+      />
+    );
+  }
 
+  // Si el juego ya empezó, mostramos los controles
   return (
-    <SafeAreaView style={estilos.contenedor}>
-
-      {/* Ocultamos la barra de estado del sistema para más espacio */}
-      <StatusBar hidden />
-
-      {/* ── Barra superior de estado ────────────────────────────────────────── */}
-      <View style={estilos.barraDeEstado}>
-
-        {/* Indicador LED + texto */}
-        <View style={estilos.seccionDeIndicador}>
-          <View style={[estilos.ledDeConexion, { backgroundColor: colorDelIndicador }]} />
-          <Text style={[estilos.textoDeEstado, { color: colorDelIndicador }]}>
-            {textoDeEstado}
-          </Text>
-        </View>
-
-        {/* IP del servidor */}
-        <Text style={estilos.textoDeIp}>🖥️ {ipDelServidor}:3000</Text>
-
-        {/* Color asignado al jugador */}
-        {colorAsignado && (
-          <View style={[estilos.circuloDeColorDelJugador, { backgroundColor: colorAsignado }]} />
-        )}
-
-        {/* Botón desconectar */}
-        <TouchableOpacity onPress={manejarDesconexion} style={estilos.botonDeDesconectar}>
-          <Text style={estilos.textoDeDesconectar}>✕</Text>
-        </TouchableOpacity>
-
-      </View>
-
-      {/* ── Área principal del control ──────────────────────────────────────── */}
-      {/* flex: 1 hace que ocupe todo el espacio restante debajo de la barra   */}
-      <View style={estilos.areaDeControl}>
-
-        {/* D-Pad a la izquierda */}
-        <View style={estilos.seccionIzquierda}>
-          <ControlDireccional
-            onPresionar={manejarPresionDireccion}
-            onSoltar={manejarSueltaDireccion}
-            estaDeshabilitado={!estaConectado}
-          />
-        </View>
-
-        {/* Botón A a la derecha */}
-        <View style={estilos.seccionDerecha}>
-          <BotonDeAccion
-            onPresionar={manejarPresionDeSalto}
-            onSoltar={manejarSueltaDeSalto}
-            estaDeshabilitado={!estaConectado}
-          />
-        </View>
-
-      </View>
-
-      {/* ── Mensaje si el juego está lleno ─────────────────────────────────── */}
-      {juegoLleno && (
-        <View style={estilos.bannerDeLleno}>
-          <Text style={estilos.textoDeLleno}>
-            El juego está lleno — máximo 4 jugadores
-          </Text>
-        </View>
-      )}
-
-    </SafeAreaView>
+    <VistaDeControl
+      estaConectado={estaConectado}
+      colorAsignado={colorAsignado}
+      enviarKeydown={enviarKeydown}
+      enviarKeyup={enviarKeyup}
+      onDesconexion={manejarDesconexion}
+    />
   );
 }
 
 // =============================================================================
-// ESTILOS
-// StyleSheet.create optimiza los estilos en React Native.
-// Es como CSS pero en JavaScript con camelCase.
+// VistaDeControl — Los botones del gamepad durante el juego
+// Botones grandes que ocupan toda la pantalla dividida en dos mitades.
 // =============================================================================
-const estilos = StyleSheet.create({
+
+function VistaDeControl({
+  estaConectado,
+  colorAsignado,
+  enviarKeydown,
+  enviarKeyup,
+  onDesconexion,
+}) {
+  const colorDelIndicador = estaConectado ? "#2ecc71" : "#e74c3c";
+
+  return (
+    <SafeAreaView style={estilosDeControl.contenedor}>
+      <StatusBar hidden />
+
+      {/* Barra de estado mínima */}
+      <View style={estilosDeControl.barraDeEstado}>
+        <View style={[
+          estilosDeControl.led,
+          { backgroundColor: colorDelIndicador },
+        ]} />
+        <Text style={[estilosDeControl.textoEstado, { color: colorDelIndicador }]}>
+          {estaConectado ? "● En juego" : "● Desconectado"}
+        </Text>
+        {colorAsignado && (
+          <View style={[
+            estilosDeControl.circuloDeColor,
+            { backgroundColor: colorAsignado },
+          ]} />
+        )}
+        <TouchableOpacity onPress={onDesconexion} style={estilosDeControl.botonSalir}>
+          <Text style={estilosDeControl.textoSalir}>✕</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Área de control: ocupa todo el espacio restante */}
+      <View style={estilosDeControl.areaDeControl}>
+
+        {/* Mitad izquierda: botones direccionales grandes */}
+        <View style={estilosDeControl.mitadIzquierda}>
+          <ControlDireccional
+            onPresionar={(dir) => enviarKeydown(dir)}
+            onSoltar={(dir) => enviarKeyup(dir)}
+            estaDeshabilitado={!estaConectado}
+          />
+        </View>
+
+        {/* Mitad derecha: botón A grande */}
+        <View style={estilosDeControl.mitadDerecha}>
+          <BotonDeAccion
+            onPresionar={() => enviarKeydown("salto")}
+            onSoltar={() => enviarKeyup("salto")}
+            estaDeshabilitado={!estaConectado}
+          />
+        </View>
+
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const estilosDeControl = StyleSheet.create({
   contenedor: {
-    flex:            1,                // Ocupa toda la pantalla
-    backgroundColor: "#0d0d1a",        // Fondo oscuro tipo consola
+    flex:            1,
+    backgroundColor: "#0d0d1a",
     flexDirection:   "column",
   },
-
-  // Barra superior fina con el estado de conexión
   barraDeEstado: {
     flexDirection:     "row",
     alignItems:        "center",
     backgroundColor:   "#16213e",
     paddingHorizontal: 16,
-    paddingVertical:   10,
-    gap:               12,
+    paddingVertical:   8,
+    gap:               10,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.08)",
+    borderBottomColor: "rgba(255,255,255,0.06)",
   },
-
-  seccionDeIndicador: {
-    flexDirection: "row",
-    alignItems:    "center",
-    gap:           6,
-    flex:          1,           // Ocupa el espacio disponible empujando los demás a la derecha
-  },
-
-  // El "LED" circular que indica si está conectado (verde) o no (rojo)
-  ledDeConexion: {
+  led: {
     width:        10,
     height:       10,
     borderRadius: 5,
   },
-
-  textoDeEstado: {
+  textoEstado: {
     fontSize:   13,
     fontWeight: "600",
+    flex:       1,
   },
-
-  textoDeIp: {
-    color:    "rgba(255,255,255,0.4)",
-    fontSize: 12,
-  },
-
-  // Círculo del color asignado al jugador (rojo, azul, verde, naranja)
-  circuloDeColorDelJugador: {
+  circuloDeColor: {
     width:        18,
     height:       18,
     borderRadius: 9,
     borderWidth:  2,
     borderColor:  "rgba(255,255,255,0.3)",
   },
-
-  botonDeDesconectar: {
-    padding:      6,
-    borderRadius: 6,
+  botonSalir: {
+    padding: 4,
   },
-
-  textoDeDesconectar: {
+  textoSalir: {
     color:      "#e74c3c",
     fontSize:   16,
     fontWeight: "bold",
   },
-
-  // Área principal que divide pantalla en izquierda y derecha
   areaDeControl: {
-    flex:           1,              // Ocupa todo el espacio restante
-    flexDirection:  "row",          // Izquierda y derecha uno al lado del otro
-    alignItems:     "center",
-    paddingVertical: 20,
+    flex:          1,
+    flexDirection: "row",
   },
-
-  // Mitad izquierda: D-Pad
-  seccionIzquierda: {
+  mitadIzquierda: {
     flex:           1,
-    alignItems:     "center",
     justifyContent: "center",
-    paddingLeft:    24,
+    alignItems:     "center",
+    backgroundColor: "rgba(255,255,255,0.02)",
   },
-
-  // Mitad derecha: botón A
-  seccionDerecha: {
+  mitadDerecha: {
     flex:           1,
-    alignItems:     "center",
     justifyContent: "center",
-    paddingRight:   24,
-  },
-
-  bannerDeLleno: {
-    backgroundColor: "rgba(231,76,60,0.15)",
-    paddingVertical: 10,
-    alignItems:      "center",
-    borderTopWidth:  1,
-    borderTopColor:  "#e74c3c",
-  },
-
-  textoDeLleno: {
-    color:    "#e74c3c",
-    fontSize: 13,
+    alignItems:     "center",
   },
 });

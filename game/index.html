@@ -8,25 +8,57 @@
   </head>
   <body>
 
-    <!-- ── Pantalla de inicio ─────────────────────────────────────────────── -->
-    <!-- Visible por defecto. Se oculta cuando el usuario presiona "Jugar".   -->
+    <!-- ── Pantalla de inicio ──────────────────────────────────────────── -->
     <div id="pantalla-de-inicio" class="visible">
+
+      <!-- Canvas de cuadraditos animados de fondo -->
+      <canvas id="canvas-de-fondo-inicio"></canvas>
+
       <div class="tarjeta-de-inicio">
         <h1 class="titulo-del-juego">🎮 Pico Park</h1>
-        <p class="descripcion-del-juego">
-          Juego cooperativo para hasta 4 jugadores.<br/>
-          Conectá tu celular con la IP del servidor.
-        </p>
-        <div class="instrucciones">
-          <div class="instruccion">🗝️ Recogé la llave</div>
-          <div class="instruccion">🚪 Llevá a todos a la salida</div>
-          <div class="instruccion">🏆 ¡Completen los 2 niveles!</div>
+
+        <!-- Indicadores de jugadores conectados -->
+        <div class="cuadraditos-de-jugadores">
+          <div class="cuadradito-de-jugador" id="cuadradito-0"
+               style="background:#e74c3c"></div>
+          <div class="cuadradito-de-jugador" id="cuadradito-1"
+               style="background:#3498db"></div>
+          <div class="cuadradito-de-jugador" id="cuadradito-2"
+               style="background:#2ecc71"></div>
+          <div class="cuadradito-de-jugador" id="cuadradito-3"
+               style="background:#f39c12"></div>
         </div>
+
+        <p class="descripcion-del-juego">
+          Conectá hasta 4 jugadores con sus celulares.<br/>
+          Los cuadrados de arriba se iluminan al conectarse.
+        </p>
+
+        <div class="instrucciones">
+          <div class="instruccion">🗝️ Recogé la llave subiendo las plataformas</div>
+          <div class="instruccion">🚪 Llevá a TODOS a la zona verde de salida</div>
+          <div class="instruccion">🏆 ¡Completá los 2 niveles cooperando!</div>
+        </div>
+
+        <!-- Selector de niveles -->
+        <div class="selector-de-niveles">
+          <button class="boton-de-nivel desbloqueado"
+                  id="boton-nivel-1"
+                  onclick="seleccionarNivel(1)">
+            🟢 Nivel 1
+          </button>
+          <button class="boton-de-nivel bloqueado"
+                  id="boton-nivel-2"
+                  onclick="seleccionarNivel(2)">
+            🔒 Nivel 2
+          </button>
+        </div>
+
         <button id="boton-de-inicio">▶ Jugar</button>
       </div>
     </div>
 
-    <!-- ── Panel de información ───────────────────────────────────────────── -->
+    <!-- ── UI del juego ────────────────────────────────────────────────── -->
     <div id="panel-de-informacion">
       <div id="texto-de-ip">🖥️ Cargando...</div>
       <div id="lista-de-jugadores"></div>
@@ -35,7 +67,7 @@
     <div id="titulo-del-nivel">Nivel 1 — Alcanzá la Llave</div>
     <div id="indicador-de-llave">🗝️ Nadie tiene la llave</div>
 
-    <!-- ── Pantalla de victoria ───────────────────────────────────────────── -->
+    <!-- ── Pantalla de victoria ───────────────────────────────────────── -->
     <div id="pantalla-de-victoria">
       <span id="texto-de-victoria">🎉 ¡Nivel completado!</span>
       <button id="boton-para-siguiente-nivel">Siguiente Nivel →</button>

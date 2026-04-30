@@ -5,43 +5,38 @@ import {
   Text,
   StyleSheet,
   Animated,
+  Dimensions,
 } from "react-native";
 
 // =============================================================================
-// ControlDireccional — D-Pad con botones izquierda y derecha
+// ControlDireccional — Botones izquierda y derecha grandes
 //
-// Responsabilidad: mostrar los dos botones direccionales con animación
-// y comunicar al padre cuándo se presiona/suelta cada dirección.
-//
-// Cada botón tiene su propia animación de escala independiente.
+// Ocupan toda la mitad izquierda de la pantalla verticalmente.
+// Cada botón tiene su propia animación independiente.
 // =============================================================================
 
-// Constante de dominio: nombres que coinciden exactamente con lo que
-// espera el servidor en server/index.js
 const DIRECCIONES = {
   IZQUIERDA: "izquierda",
   DERECHA:   "derecha",
 };
 
-// Cuánto se achica el botón al presionar (0.88 = 88% del tamaño original)
-const ESCALA_AL_PRESIONAR    = 0.88;
-const DURACION_DE_ANIMACION  = 70; // milisegundos
+const ESCALA_AL_PRESIONAR   = 0.92;
+const DURACION_DE_ANIMACION = 60;
+
+// Calculamos el alto disponible para los botones
+const ALTO_DE_PANTALLA = Dimensions.get("window").height;
+// Cada botón ocupa casi la mitad del alto disponible
+const ALTO_DE_BOTON    = (ALTO_DE_PANTALLA - 60) / 2;
 
 export function ControlDireccional({ onPresionar, onSoltar, estaDeshabilitado }) {
-  // Cada botón tiene su propia Animated.Value para escala independiente
   const escalaIzquierda = useRef(new Animated.Value(1)).current;
   const escalaDerecha   = useRef(new Animated.Value(1)).current;
 
-  /**
-   * Anima un botón achicándolo al presionar o agrandándolo al soltar.
-   * escalaAnimada: el Animated.Value del botón
-   * haciaValor: 0.88 al presionar, 1 al soltar
-   */
-  function animarBoton(escalaAnimada, haciaValor) {
-    Animated.timing(escalaAnimada, {
-      toValue:         haciaValor,
+  function animarBoton(escala, valor) {
+    Animated.timing(escala, {
+      toValue:         valor,
       duration:        DURACION_DE_ANIMACION,
-      useNativeDriver: true,  // Corre en el hilo nativo → más fluido
+      useNativeDriver: true,
     }).start();
   }
 
@@ -70,34 +65,39 @@ export function ControlDireccional({ onPresionar, onSoltar, estaDeshabilitado })
   }
 
   return (
+    // Los dos botones van UNO ARRIBA DEL OTRO (column)
+    // izquierda arriba, derecha abajo
     <View style={estilos.contenedor}>
 
-      {/* ── Botón Izquierda ── */}
-      <Animated.View style={{ transform: [{ scale: escalaIzquierda }] }}>
+      <Animated.View style={[
+        estilos.botonContenedor,
+        { transform: [{ scale: escalaIzquierda }] },
+      ]}>
         <TouchableOpacity
           style={[estilos.boton, estaDeshabilitado && estilos.botonDeshabilitado]}
           onPressIn={manejarPresionIzquierda}
           onPressOut={manejarSueltaIzquierda}
-          activeOpacity={1}   // Sin opacidad porque ya tenemos animación
+          activeOpacity={1}
         >
           <Text style={estilos.flecha}>◀</Text>
-          <Text style={estilos.etiquetaBoton}>IZQ</Text>
+          <Text style={estilos.etiqueta}>IZQ</Text>
         </TouchableOpacity>
       </Animated.View>
 
-      {/* Espacio entre los dos botones */}
-      <View style={estilos.espaciado} />
+      <View style={estilos.separador} />
 
-      {/* ── Botón Derecha ── */}
-      <Animated.View style={{ transform: [{ scale: escalaDerecha }] }}>
+      <Animated.View style={[
+        estilos.botonContenedor,
+        { transform: [{ scale: escalaDerecha }] },
+      ]}>
         <TouchableOpacity
-          style={[estilos.boton, estaDeshabilitado && estilos.botonDeshabilitado]}
+          style={[estilos.boton, estilos.botonDerecha, estaDeshabilitado && estilos.botonDeshabilitado]}
           onPressIn={manejarPresionDerecha}
           onPressOut={manejarSueltaDerecha}
           activeOpacity={1}
         >
           <Text style={estilos.flecha}>▶</Text>
-          <Text style={estilos.etiquetaBoton}>DER</Text>
+          <Text style={estilos.etiqueta}>DER</Text>
         </TouchableOpacity>
       </Animated.View>
 
@@ -107,48 +107,44 @@ export function ControlDireccional({ onPresionar, onSoltar, estaDeshabilitado })
 
 const estilos = StyleSheet.create({
   contenedor: {
-    flexDirection: "row",   // Los dos botones uno al lado del otro
-    alignItems:    "center",
+    flex:          1,
+    flexDirection: "column", // Arriba izquierda, abajo derecha
+    padding:       8,
+    gap:           8,
   },
-
+  botonContenedor: {
+    flex: 1, // Cada botón ocupa la mitad del espacio
+  },
   boton: {
-    width:           110,
-    height:          110,
-    borderRadius:    16,
+    flex:            1,
+    borderRadius:    20,
     backgroundColor: "#1e3a5f",
     justifyContent:  "center",
     alignItems:      "center",
     borderWidth:     2,
-    borderColor:     "rgba(74,111,165,0.6)",
-    // Sombra en Android
+    borderColor:     "rgba(74,111,165,0.7)",
     elevation:       6,
-    // Sombra en iOS
-    shadowColor:     "#4a6fa5",
-    shadowOffset:    { width: 0, height: 3 },
-    shadowOpacity:   0.4,
-    shadowRadius:    6,
   },
-
+  botonDerecha: {
+    backgroundColor: "#1a3a6f",
+    borderColor:     "rgba(52,152,219,0.7)",
+  },
   botonDeshabilitado: {
     backgroundColor: "#111",
     borderColor:     "rgba(255,255,255,0.05)",
     elevation:       0,
-    shadowOpacity:   0,
   },
-
   flecha: {
     color:    "#ffffff",
-    fontSize: 36,
+    fontSize: 48,
   },
-
-  etiquetaBoton: {
+  etiqueta: {
     color:      "rgba(255,255,255,0.5)",
-    fontSize:   10,
-    marginTop:  2,
+    fontSize:   12,
+    marginTop:  4,
     fontWeight: "600",
   },
-
-  espaciado: {
-    width: 20,
+  separador: {
+    height: 4,
   },
 });

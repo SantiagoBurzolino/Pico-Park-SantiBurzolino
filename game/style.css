@@ -1,58 +1,103 @@
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
 body {
   background-color: #1a1a2e;
   overflow: hidden;
   font-family: "Segoe UI", sans-serif;
+  width: 100vw;
+  height: 100vh;
 }
 
-canvas { display: block; }
+/* El canvas de Matter.js ocupa toda la ventana */
+canvas {
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+}
 
-/* ── Pantalla de inicio ───────────────────────────────────────────────────── */
+/* ── Pantalla de inicio ───────────────────────────────────────────────── */
 #pantalla-de-inicio {
   position: fixed;
   inset: 0;
-  display: none;         /* Oculta por defecto */
+  display: none;
   justify-content: center;
   align-items: center;
-  background: rgba(10, 10, 30, 0.95);
   z-index: 30;
+  /* Fondo con cuadraditos animados via canvas separado */
+  background: rgba(10, 10, 30, 0.92);
 }
 
 #pantalla-de-inicio.visible {
-  display: flex;         /* Se muestra cuando tiene la clase "visible" */
+  display: flex;
+}
+
+/* Canvas de fondo animado de la pantalla de inicio */
+#canvas-de-fondo-inicio {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
 }
 
 .tarjeta-de-inicio {
+  position: relative;
+  z-index: 1;
   background: #16213e;
   border-radius: 20px;
   padding: 48px;
-  max-width: 500px;
+  max-width: 520px;
   width: 90%;
   text-align: center;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
   border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 0 60px rgba(233,69,96,0.15);
 }
 
 .titulo-del-juego {
-  font-size: 48px;
+  font-size: 52px;
   color: #ffffff;
   font-weight: bold;
+  letter-spacing: 2px;
 }
 
 .descripcion-del-juego {
   color: #a0a0b0;
-  font-size: 16px;
-  line-height: 1.6;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+/* Muestra los colores de los 4 jugadores como cuadraditos */
+.cuadraditos-de-jugadores {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin: 4px 0;
+}
+
+.cuadradito-de-jugador {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: 2px solid rgba(255,255,255,0.3);
+  transition: transform 0.3s;
+}
+
+.cuadradito-de-jugador.conectado {
+  transform: scale(1.15);
+  border-color: #ffffff;
+  box-shadow: 0 0 12px currentColor;
 }
 
 .instrucciones {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin: 8px 0;
+  gap: 8px;
 }
 
 .instruccion {
@@ -60,7 +105,43 @@ canvas { display: block; }
   border-radius: 8px;
   padding: 10px 16px;
   color: #ffffff;
+  font-size: 14px;
+}
+
+/* Selector de niveles */
+.selector-de-niveles {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.boton-de-nivel {
+  flex: 1;
+  padding: 14px;
+  border: 2px solid rgba(255,255,255,0.15);
+  border-radius: 10px;
+  background: transparent;
+  color: #ffffff;
   font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 600;
+}
+
+.boton-de-nivel.desbloqueado {
+  border-color: #2ecc71;
+  background: rgba(46,204,113,0.1);
+}
+
+.boton-de-nivel.desbloqueado:hover {
+  background: rgba(46,204,113,0.25);
+  transform: scale(1.03);
+}
+
+.boton-de-nivel.bloqueado {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: rgba(255,255,255,0.08);
 }
 
 #boton-de-inicio {
@@ -73,7 +154,6 @@ canvas { display: block; }
   font-weight: bold;
   cursor: pointer;
   transition: transform 0.1s, background 0.2s;
-  margin-top: 8px;
 }
 
 #boton-de-inicio:hover {
@@ -81,10 +161,11 @@ canvas { display: block; }
   background: #c0392b;
 }
 
-/* ── Paneles de info ──────────────────────────────────────────────────────── */
+/* ── Paneles de info durante el juego ────────────────────────────────── */
 #panel-de-informacion {
   position: fixed;
-  top: 16px; left: 16px;
+  top: 16px;
+  left: 16px;
   color: #fff;
   font-size: 14px;
   background: rgba(0,0,0,0.7);
@@ -97,7 +178,8 @@ canvas { display: block; }
 
 #titulo-del-nivel {
   position: fixed;
-  top: 16px; left: 50%;
+  top: 16px;
+  left: 50%;
   transform: translateX(-50%);
   color: #fff;
   font-size: 18px;
@@ -111,7 +193,8 @@ canvas { display: block; }
 
 #indicador-de-llave {
   position: fixed;
-  bottom: 16px; left: 50%;
+  bottom: 16px;
+  left: 50%;
   transform: translateX(-50%);
   color: #f1c40f;
   font-size: 15px;
@@ -129,12 +212,13 @@ canvas { display: block; }
 }
 
 .circulo-de-color-del-jugador {
-  width: 12px; height: 12px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   display: inline-block;
 }
 
-/* ── Pantalla de victoria ─────────────────────────────────────────────────── */
+/* ── Pantalla de victoria ─────────────────────────────────────────────── */
 #pantalla-de-victoria {
   position: fixed;
   inset: 0;
@@ -142,7 +226,7 @@ canvas { display: block; }
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  background: rgba(0,0,0,0.82);
+  background: rgba(0,0,0,0.85);
   color: white;
   font-size: 48px;
   font-weight: bold;
@@ -150,7 +234,9 @@ canvas { display: block; }
   z-index: 20;
 }
 
-#pantalla-de-victoria.visible { display: flex; }
+#pantalla-de-victoria.visible {
+  display: flex;
+}
 
 #boton-para-siguiente-nivel {
   font-size: 20px;
@@ -163,4 +249,6 @@ canvas { display: block; }
   transition: transform 0.15s;
 }
 
-#boton-para-siguiente-nivel:hover { transform: scale(1.07); }
+#boton-para-siguiente-nivel:hover {
+  transform: scale(1.07);
+}
