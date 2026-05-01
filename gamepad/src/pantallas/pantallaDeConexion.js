@@ -11,7 +11,7 @@ import {
 } from "react-native";
 
 // =============================================================================
-// PantallaDeConexion — El usuario ingresa la IP del servidor
+// PantallaDeConexion — Ingreso de IP del servidor
 //
 // Responsabilidad: capturar y validar la IP. No maneja WebSockets.
 // =============================================================================
@@ -60,7 +60,7 @@ export function PantallaDeConexion({ onConexionExitosa }) {
           value={ipIngresada}
           onChangeText={setIpIngresada}
           placeholder="192.168.1.15"
-          placeholderTextColor="#666"
+          placeholderTextColor="#555"
           keyboardType="numeric"
           autoCapitalize="none"
           autoCorrect={false}
@@ -98,7 +98,7 @@ const estilos = StyleSheet.create({
     borderRadius:    16,
     padding:         32,
     width:           "100%",
-    maxWidth:        380,
+    maxWidth:        400,
     alignItems:      "center",
     gap:             16,
   },
@@ -108,7 +108,7 @@ const estilos = StyleSheet.create({
     color:      "#ffffff",
   },
   subtitulo: {
-    fontSize:   18,
+    fontSize:   16,
     color:      "#a0a0b0",
     fontWeight: "600",
   },
@@ -118,24 +118,24 @@ const estilos = StyleSheet.create({
     textAlign: "center",
   },
   campoDeTexto: {
-    width:         "100%",
+    width:           "100%",
     backgroundColor: "#0f3460",
-    color:         "#ffffff",
-    fontSize:      22,
-    padding:       14,
-    borderRadius:  10,
-    textAlign:     "center",
-    letterSpacing: 2,
-    marginTop:     8,
+    color:           "#ffffff",
+    fontSize:        24,
+    padding:         14,
+    borderRadius:    10,
+    textAlign:       "center",
+    letterSpacing:   3,
+    marginTop:       8,
   },
   botonDeConexion: {
-    backgroundColor:  "#e94560",
-    paddingVertical:  14,
+    backgroundColor:   "#e94560",
+    paddingVertical:   14,
     paddingHorizontal: 40,
-    borderRadius:     10,
-    marginTop:        8,
-    width:            "100%",
-    alignItems:       "center",
+    borderRadius:      10,
+    marginTop:         8,
+    width:             "100%",
+    alignItems:        "center",
   },
   botonDeshabilitado: {
     backgroundColor: "#555",

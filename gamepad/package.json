@@ -9,11 +9,13 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "expo": "^55.0.0",
-    "expo-keep-awake": "~55.0.6",
+    "expo": "~55.0.19",
+    "expo-keep-awake": "~55.0.7",
+    "expo-screen-orientation": "~55.0.13",
     "expo-status-bar": "~55.0.5",
     "react": "19.2.0",
     "react-native": "0.83.6",
+    "react-native-gesture-handler": "~2.30.0",
     "socket.io-client": "^4.8.3"
   },
   "private": true

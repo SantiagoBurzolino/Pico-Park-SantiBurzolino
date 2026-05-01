@@ -9,9 +9,9 @@ const GROSOR_DE_PAREDES            = 50;
 const TAMANO_DEL_JUGADOR           = 24;
 const LADO_DEL_CUADRADO            = TAMANO_DEL_JUGADOR * 2;
 const VELOCIDAD_DE_MOVIMIENTO      = 0.006;
-const FUERZA_DE_SALTO              = 0.025;
+const FUERZA_DE_SALTO              = 0.022;
+const UMBRAL_DE_VELOCIDAD_EN_SUELO = 0.5;
 const VELOCIDAD_MAXIMA_HORIZONTAL  = 5;
-const UMBRAL_DE_VELOCIDAD_EN_SUELO = 1.5;
 const DISTANCIA_DE_LIGADURA_DE_LLAVE = TAMANO_DEL_JUGADOR + 18;
 const CANTIDAD_TOTAL_DE_NIVELES    = 2;
 const TIPO_DE_CLIENTE_JUEGO        = "juego";
@@ -23,7 +23,7 @@ const COLORES_DE_JUGADORES         = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12"
 const FUERZA_DE_EMPUJE_DE_CAJA    = 0.003;
 
 const TITULOS_DE_NIVELES = {
-  1: "Nivel 1 — Buscá la Llave",
+  1: "Nivel 1 — La llave perdida",
   2: "Nivel 2 — La Torre y la Caja",
 };
 
@@ -282,32 +282,26 @@ function construirEstructuraBasicaDelMundo() {
 // - Cuando alguien tiene la llave, todos vuelven a la puerta para salir
 // - La condición se adapta a la cantidad de jugadores conectados
 // ─────────────────────────────────────────────────────────────────────────────
+// SACAMOS la puerta física (se veía fea)
+// La zona verde de salida es suficiente y más clara visualmente
 function construirNivelUno() {
-  const aw = ANCHO_DEL_CANVAS; // alias para no repetir
+  const aw = ANCHO_DEL_CANVAS;
   const ah = ALTO_DEL_CANVAS;
 
-  // Plataformas escalonadas hacia la derecha y arriba
   const plataformas = [
     crearPlataforma(aw * 0.20, ah * 0.75, aw * 0.16, 18, "#4a6fa5"),
     crearPlataforma(aw * 0.38, ah * 0.63, aw * 0.14, 18, "#4a6fa5"),
     crearPlataforma(aw * 0.55, ah * 0.51, aw * 0.14, 18, "#4a6fa5"),
     crearPlataforma(aw * 0.72, ah * 0.39, aw * 0.14, 18, "#4a6fa5"),
-    // Plataforma naranja con la llave
     crearPlataforma(aw * 0.88, ah * 0.27, aw * 0.14, 18, "#e67e22"),
   ];
 
-  // Llave encima de la plataforma naranja (arriba derecha)
   llaveDelNivel = crearLlave(aw * 0.88, ah * 0.27 - 20);
 
-  // Puerta estilo Pico Park: dos pilares + dintel, en el lado izquierdo abajo
-  // donde arrancan los jugadores. Cuando alguien tiene la llave y todos están
-  // en la zona de salida, los pilares desaparecen (se eliminan del mundo).
-  const puerta = construirPuertaEstiloPicoPark(aw * 0.07, ah * 0.88);
-
-  // Zona de salida: frente a la puerta
+  // La zona de salida es el área verde abajo a la izquierda
+  // donde los jugadores deben pararse con la llave para ganar
   zonaDeSalidaDelNivel = crearZonaDeSalida(
-    aw * 0.07, ah * 0.915,
-    aw * 0.12, 50
+    aw * 0.07, ah * 0.92, aw * 0.12, 60
   );
 
   World.add(mundoDeFisica, [
@@ -315,8 +309,7 @@ function construirNivelUno() {
     llaveDelNivel,
     zonaDeSalidaDelNivel,
   ]);
-  // Los cuerpos de la puerta se agregan por separado para poder eliminarlos
-  World.add(mundoDeFisica, puerta);
+
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -592,12 +585,22 @@ function aplicarMovimientoHorizontal(cuerpo, inputActual) {
   }
 }
 
+// Esta función ahora permite moverse y saltar al mismo tiempo.
+// El salto solo se ejecuta UNA vez por presión gracias al umbral estricto.
+// Después de saltar, inputActual.salto se pone en false para evitar
+// que si mantenés apretado el botón siga saltando infinitamente.
 function aplicarSaltoSiCorresponde(cuerpo, inputActual) {
   const estaEnElSuelo      = verificarSiJugadorEstaEnSuelo(cuerpo);
   const puedeEjecutarSalto = inputActual.salto && estaEnElSuelo;
+
   if (!puedeEjecutarSalto) return;
 
+  // Aplicamos la fuerza de salto hacia arriba
   Body.applyForce(cuerpo, cuerpo.position, { x: 0, y: -FUERZA_DE_SALTO });
+
+  // MUY IMPORTANTE: consumimos el salto inmediatamente.
+  // Aunque el servidor siga mandando salto: true,
+  // no saltamos de nuevo hasta que el jugador suelte y vuelva a presionar.
   inputActual.salto = false;
 }
 
@@ -819,16 +822,15 @@ function escucharEventosDelServidor() {
   socketDelJuego.on("actualizacion_de_jugadores", manejarActualizacionDeJugadores);
   socketDelJuego.on("tick_del_juego",             manejarTickDelJuego);
 
-  // NUEVO: el servidor nos avisa que el juego fue iniciado desde un gamepad
-  // con el nivel elegido por votación y la cantidad de jugadores
-  socketDelJuego.on("juego_iniciado", (datos) => {
-    nivelActual        = datos.nivelElegido;
-    nivelSeleccionado  = datos.nivelElegido;
+  // Cuando cualquier gamepad toca "Iniciar", el servidor nos avisa.
+  // Ocultamos la pantalla de inicio y cargamos el nivel 1.
+  socketDelJuego.on("juego_iniciado", () => {
+    if (elJuegoEstaEnCurso) return; // Evitamos iniciar dos veces
+    nivelActual        = 1;
     elJuegoEstaEnCurso = true;
-
     ocultarPantallaDeInicio();
     iniciarLoopPrincipal();
-    cargarNivelAdaptativo(datos.nivelElegido, datos.cantidadDeJugadores);
+    cargarNivel(nivelActual);
   });
 }
 
@@ -862,12 +864,19 @@ function manejarTickDelJuego(estadoDelJuego) {
   Object.keys(estadoDelJuego.jugadores).forEach((id) => {
     const inputDelServidor = estadoDelJuego.jugadores[id].input;
     if (!inputsDeJugadores[id]) return;
+
+    // Movimiento horizontal: actualización directa
     inputsDeJugadores[id].izquierda = inputDelServidor.izquierda;
     inputsDeJugadores[id].derecha   = inputDelServidor.derecha;
-    if (inputDelServidor.salto) inputsDeJugadores[id].salto = true;
+
+    // Salto: solo ACTIVAMOS desde el servidor, nunca desactivamos.
+    // La desactivación la hace aplicarSaltoSiCorresponde() internamente.
+    // Esto permite: mover + saltar al mismo tiempo sin conflictos.
+    if (inputDelServidor.salto) {
+      inputsDeJugadores[id].salto = true;
+    }
   });
 }
-
 // =============================================================================
 // NIVEL BAJO — UI
 // =============================================================================
@@ -967,43 +976,23 @@ function construirNivelUnoAdaptativo(cantidadDeJugadores) {
  * Con pocos jugadores la caja es más liviana y la plataforma más baja.
  * Con más jugadores la caja es más pesada y la plataforma más alta.
  */
-function construirNivelDosAdaptativo(cantidadDeJugadores) {
+function construirNivelDos() {
   const aw = ANCHO_DEL_CANVAS;
   const ah = ALTO_DEL_CANVAS;
 
-  // La altura de la plataforma con la llave varía según jugadores
-  const alturaRelativaDePlataformaAlta = cantidadDeJugadores <= 2 ? 0.35 : 0.25;
-  // La densidad de la caja varía también
-  const densidadDeLaCaja = cantidadDeJugadores <= 2 ? 0.002 : 0.004;
-
   const plataformas = [
-    crearPlataforma(aw * 0.15, ah * 0.82, aw * 0.18, 18, "#4a6fa5"),
-    crearPlataforma(aw * 0.45, ah * 0.65, aw * 0.14, 18, "#8e44ad"),
-    crearPlataforma(aw * 0.68, ah * 0.50, aw * 0.14, 18, "#8e44ad"),
-    crearPlataforma(aw * 0.85, ah * alturaRelativaDePlataformaAlta, aw * 0.16, 18, "#c0392b"),
+    crearPlataforma(aw * 0.20, ah * 0.75, aw * 0.16, 18, "#4a6fa5"),
+    crearPlataforma(aw * 0.45, ah * 0.62, aw * 0.14, 18, "#8e44ad"),
+    crearPlataforma(aw * 0.68, ah * 0.48, aw * 0.14, 18, "#8e44ad"),
+    crearPlataforma(aw * 0.85, ah * 0.28, aw * 0.16, 18, "#c0392b"),
   ];
 
-  cajaEmpujable = Bodies.rectangle(
-    aw * 0.35, ah * 0.88, 60, 60,
-    {
-      label:       "cajaEmpujable",
-      isStatic:    false,
-      friction:    0.8,
-      restitution: 0.1,
-      density:     densidadDeLaCaja,
-      inertia:     Infinity,
-      render: {
-        fillStyle:   "#795548",
-        strokeStyle: "#5d4037",
-        lineWidth:   3,
-      },
-    }
+  cajaEmpujable = crearCajaEmpujable(aw * 0.35, ah * 0.88);
+  llaveDelNivel = crearLlave(aw * 0.85, ah * 0.28 - 20);
+
+  zonaDeSalidaDelNivel = crearZonaDeSalida(
+    aw * 0.07, ah * 0.92, aw * 0.12, 60
   );
-
-  llaveDelNivel = crearLlave(aw * 0.85, ah * alturaRelativaDePlataformaAlta - 20);
-
-  const puerta = construirPuertaEstiloPicoPark(aw * 0.07, ah * 0.90);
-  zonaDeSalidaDelNivel = crearZonaDeSalida(aw * 0.07, ah * 0.925, aw * 0.12, 50);
 
   World.add(mundoDeFisica, [
     ...plataformas,
@@ -1011,7 +1000,6 @@ function construirNivelDosAdaptativo(cantidadDeJugadores) {
     llaveDelNivel,
     zonaDeSalidaDelNivel,
   ]);
-  World.add(mundoDeFisica, puerta);
 }
 
 

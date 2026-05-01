@@ -8,6 +8,7 @@ const os         = require("os");
 
 // =============================================================================
 // CONSTANTES
+// Manual: sin números mágicos sueltos en el código.
 // =============================================================================
 const PUERTO_DEL_SERVIDOR          = 3000;
 const CANTIDAD_MAXIMA_DE_JUGADORES = 4;
@@ -18,7 +19,7 @@ const TIPO_DE_CLIENTE_GAMEPAD      = "gamepad";
 const TIPO_DE_CLIENTE_JUEGO        = "juego";
 
 // =============================================================================
-// CONFIGURACIÓN DEL SERVIDOR
+// CONFIGURACIÓN
 // =============================================================================
 const aplicacionExpress    = express();
 const servidorHttp         = http.createServer(aplicacionExpress);
@@ -28,49 +29,37 @@ const servidorDeWebSockets = new Server(servidorHttp, {
 
 aplicacionExpress.use(express.static(path.join(__dirname, "../game")));
 
-// =============================================================================
-// ESTADO GLOBAL DEL SERVIDOR
-// =============================================================================
 const jugadoresConectados = {};
 
-// Votos de nivel: cada jugador puede votar por el nivel que quiere jugar.
-// La estructura es { socketId: numeroDeNivel }
-const votosDeNivel = {};
-
-// Indica si el juego ya fue iniciado (para no iniciarlo dos veces)
-let elJuegoFueIniciado = false;
-
 // =============================================================================
-// NIVEL ALTO — Orquestador de conexiones
+// NIVEL ALTO — Orquestador
 // =============================================================================
 servidorDeWebSockets.on("connection", (socketDelCliente) => {
   socketDelCliente.on("identificarse", (tipoDeCliente) => {
     if (tipoDeCliente === TIPO_DE_CLIENTE_JUEGO) {
       manejarConexionDelJuego(socketDelCliente);
-      return;
-    }
-    if (tipoDeCliente === TIPO_DE_CLIENTE_GAMEPAD) {
+    } else if (tipoDeCliente === TIPO_DE_CLIENTE_GAMEPAD) {
       manejarConexionDeGamepad(socketDelCliente);
-      return;
     }
   });
 });
 
 // =============================================================================
-// NIVEL MEDIO — Conexión del juego (navegador PC)
+// NIVEL MEDIO — Juego (navegador PC)
+// El juego solo escucha, no genera jugadores.
 // =============================================================================
 function manejarConexionDelJuego(socketDelJuego) {
   console.log("🖥️  Juego conectado");
+  // Le mandamos el estado actual por si el juego se reconecta
   socketDelJuego.emit("actualizacion_de_jugadores", jugadoresConectados);
 
   socketDelJuego.on("disconnect", () => {
     console.log("🖥️  Juego desconectado");
-    elJuegoFueIniciado = false; // Permitimos reiniciar si el juego se cierra
   });
 }
 
 // =============================================================================
-// NIVEL MEDIO — Conexión de gamepad (celular)
+// NIVEL MEDIO — Gamepad (celular)
 // =============================================================================
 function manejarConexionDeGamepad(socketDelJugador) {
   if (verificarSiElJuegoEstaLleno()) {
@@ -80,13 +69,12 @@ function manejarConexionDeGamepad(socketDelJugador) {
 
   registrarNuevoJugador(socketDelJugador);
   escucharInputsDelJugador(socketDelJugador);
-  escucharVotoDeNivel(socketDelJugador);
   escucharSolicitudDeInicio(socketDelJugador);
   escucharDesconexionDelJugador(socketDelJugador);
 }
 
 // =============================================================================
-// NIVEL MEDIO — Registro de jugador
+// NIVEL MEDIO — Gestión de jugadores
 // =============================================================================
 
 function verificarSiElJuegoEstaLleno() {
@@ -94,7 +82,7 @@ function verificarSiElJuegoEstaLleno() {
 }
 
 function rechazarConexionPorJuegoLleno(socketDelJugador) {
-  console.log("⚠️  Conexión rechazada: juego lleno");
+  console.log("⚠️  Sala llena — conexión rechazada");
   socketDelJugador.emit("juego_lleno");
   socketDelJugador.disconnect();
 }
@@ -103,17 +91,15 @@ function registrarNuevoJugador(socketDelJugador) {
   const nuevoJugador = construirDatosDelJugador(socketDelJugador.id);
   jugadoresConectados[socketDelJugador.id] = nuevoJugador;
 
-  // Le decimos al jugador su color y ID
+  // Le decimos al gamepad su color e ID asignados
   socketDelJugador.emit("jugador_asignado", {
     id:            nuevoJugador.id,
     color:         nuevoJugador.color,
     indiceDeColor: nuevoJugador.indiceDeColor,
   });
 
-  // Notificamos a todos (juego + gamepads) la lista actualizada
+  // Notificamos a TODOS (juego + gamepads) que la lista cambió
   notificarActualizacionDeJugadores();
-  // También enviamos los votos actuales para que el nuevo jugador los vea
-  notificarActualizacionDeVotos();
 
   console.log(`✅ Jugador conectado | Color: ${nuevoJugador.color}`);
 }
@@ -124,88 +110,16 @@ function construirDatosDelJugador(idDelSocket) {
     id:            idDelSocket,
     color:         COLORES_DE_JUGADORES[indiceDeColor],
     indiceDeColor: indiceDeColor,
-    input: { izquierda: false, derecha: false, salto: false },
+    input: {
+      izquierda: false,
+      derecha:   false,
+      salto:     false,
+    },
   };
 }
 
-// =============================================================================
-// NIVEL MEDIO — Sistema de votación de nivel
-// Cada gamepad puede votar por el nivel que quiere jugar.
-// La PC muestra los votos en tiempo real.
-// =============================================================================
-
-/**
- * Escucha cuando un jugador vota por un nivel.
- * El gamepad manda el evento "votar_nivel" con el número de nivel.
- */
-function escucharVotoDeNivel(socketDelJugador) {
-  socketDelJugador.on("votar_nivel", (numeroDeNivel) => {
-    const esNivelValido = numeroDeNivel === 1 || numeroDeNivel === 2;
-    if (!esNivelValido) return;
-
-    votosDeNivel[socketDelJugador.id] = numeroDeNivel;
-    notificarActualizacionDeVotos();
-
-    console.log(`🗳️  Jugador votó nivel ${numeroDeNivel}`);
-  });
-}
-
-/**
- * Calcula cuál es el nivel más votado.
- * En caso de empate, gana el nivel 1 (el más simple).
- */
-function calcularNivelMasVotado() {
-  const conteoDeVotos = { 1: 0, 2: 0 };
-
-  Object.values(votosDeNivel).forEach((voto) => {
-    conteoDeVotos[voto]++;
-  });
-
-  return conteoDeVotos[2] > conteoDeVotos[1] ? 2 : 1;
-}
-
-/**
- * Notifica a todos los clientes el estado actual de los votos.
- */
-function notificarActualizacionDeVotos() {
-  const nivelMasVotado      = calcularNivelMasVotado();
-  const cantidadDeJugadores = Object.keys(jugadoresConectados).length;
-
-  servidorDeWebSockets.emit("actualizacion_de_votos", {
-    votos:           votosDeNivel,
-    nivelMasVotado:  nivelMasVotado,
-    totalJugadores:  cantidadDeJugadores,
-  });
-}
-
-// =============================================================================
-// NIVEL MEDIO — Inicio del juego desde el gamepad
-// Cualquier jugador conectado puede iniciar el juego.
-// El servidor calcula el nivel ganador y se lo manda al juego (PC).
-// =============================================================================
-
-function escucharSolicitudDeInicio(socketDelJugador) {
-  socketDelJugador.on("solicitar_inicio", () => {
-    const hayJugadoresSuficientes = Object.keys(jugadoresConectados).length >= 1;
-    if (!hayJugadoresSuficientes || elJuegoFueIniciado) return;
-
-    elJuegoFueIniciado = true;
-
-    const nivelElegido        = calcularNivelMasVotado();
-    const cantidadDeJugadores = Object.keys(jugadoresConectados).length;
-
-    // Le mandamos al juego (PC) el nivel elegido y cuántos jugadores hay
-    // para que construya el nivel adaptado
-    servidorDeWebSockets.emit("juego_iniciado", {
-      nivelElegido:      nivelElegido,
-      cantidadDeJugadores: cantidadDeJugadores,
-    });
-
-    // Le avisamos a todos los gamepads que el juego empezó
-    servidorDeWebSockets.emit("lobby_cerrado");
-
-    console.log(`🎮 Juego iniciado | Nivel: ${nivelElegido} | Jugadores: ${cantidadDeJugadores}`);
-  });
+function notificarActualizacionDeJugadores() {
+  servidorDeWebSockets.emit("actualizacion_de_jugadores", jugadoresConectados);
 }
 
 // =============================================================================
@@ -225,6 +139,7 @@ function actualizarInputDelJugador(idDelJugador, tecla, estaPresionada) {
   const jugadorExiste = jugadoresConectados[idDelJugador] !== undefined;
   if (!jugadorExiste) return;
 
+  // Validamos que la tecla sea una de las permitidas (seguridad básica)
   const esTeclaValida = ["izquierda", "derecha", "salto"].includes(tecla);
   if (!esTeclaValida) return;
 
@@ -232,31 +147,37 @@ function actualizarInputDelJugador(idDelJugador, tecla, estaPresionada) {
 }
 
 // =============================================================================
+// NIVEL MEDIO — Inicio del juego desde el gamepad
+// Cualquier jugador puede tocar "Iniciar" en su celular.
+// El servidor le avisa al juego (PC) que arranque.
+// =============================================================================
+function escucharSolicitudDeInicio(socketDelJugador) {
+  socketDelJugador.on("solicitar_inicio", () => {
+    const hayJugadores = Object.keys(jugadoresConectados).length >= 1;
+    if (!hayJugadores) return;
+
+    // Le avisamos al juego (PC) que inicie con los jugadores conectados
+    servidorDeWebSockets.emit("juego_iniciado", {
+      cantidadDeJugadores: Object.keys(jugadoresConectados).length,
+    });
+
+    console.log(`🎮 Juego iniciado por un jugador`);
+  });
+}
+
+// =============================================================================
 // NIVEL MEDIO — Desconexión
 // =============================================================================
-
 function escucharDesconexionDelJugador(socketDelJugador) {
   socketDelJugador.on("disconnect", () => {
     delete jugadoresConectados[socketDelJugador.id];
-    delete votosDeNivel[socketDelJugador.id];
-
-    // Si todos se desconectaron, permitimos reiniciar el juego
-    const quedanJugadores = Object.keys(jugadoresConectados).length > 0;
-    if (!quedanJugadores) elJuegoFueIniciado = false;
-
     notificarActualizacionDeJugadores();
-    notificarActualizacionDeVotos();
-
     console.log(`❌ Jugador desconectado | ID: ${socketDelJugador.id}`);
   });
 }
 
-function notificarActualizacionDeJugadores() {
-  servidorDeWebSockets.emit("actualizacion_de_jugadores", jugadoresConectados);
-}
-
 // =============================================================================
-// LOOP — Game tick 30 veces por segundo
+// LOOP — 30 ticks por segundo
 // =============================================================================
 function iniciarLoopDelJuego() {
   setInterval(() => {

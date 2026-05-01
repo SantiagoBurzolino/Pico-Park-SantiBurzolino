@@ -1,14 +1,17 @@
 import React, { useRef } from "react";
 import {
-  TouchableOpacity,
   Text,
   StyleSheet,
   Animated,
   View,
+  Pressable,
 } from "react-native";
 
 // =============================================================================
-// BotonDeAccion — Botón A de salto que ocupa toda la mitad derecha
+// BotonDeAccion — Botón A de salto con soporte multi-touch
+//
+// Usa Pressable igual que ControlDireccional para que funcione
+// simultáneamente con los botones direccionales.
 // =============================================================================
 
 const ESCALA_AL_PRESIONAR   = 0.88;
@@ -46,21 +49,21 @@ export function BotonDeAccion({ onPresionar, onSoltar, estaDeshabilitado }) {
   }
 
   return (
-    // El View exterior ocupa todo el espacio de la mitad derecha
     <View style={estilos.contenedorExterno}>
       <Animated.View style={[
         estilos.contenedorAnimado,
         { transform: [{ scale: escalaAnimada }] },
       ]}>
-        <TouchableOpacity
+        <Pressable
           style={[estilos.boton, estaDeshabilitado && estilos.botonDeshabilitado]}
           onPressIn={manejarPresion}
           onPressOut={manejarSuelta}
-          activeOpacity={1}
+          delayLongPress={100000}
+          accessible={false}
         >
           <Text style={estilos.letraA}>A</Text>
           <Text style={estilos.etiqueta}>SALTO</Text>
-        </TouchableOpacity>
+        </Pressable>
       </Animated.View>
     </View>
   );
@@ -69,41 +72,37 @@ export function BotonDeAccion({ onPresionar, onSoltar, estaDeshabilitado }) {
 const estilos = StyleSheet.create({
   contenedorExterno: {
     flex:    1,
-    padding: 8,
+    padding: 10,
   },
   contenedorAnimado: {
     flex: 1,
   },
   boton: {
     flex:            1,
-    borderRadius:    20,
+    borderRadius:    16,
     backgroundColor: "#c0392b",
     justifyContent:  "center",
     alignItems:      "center",
     borderWidth:     3,
     borderColor:     "#e74c3c",
     elevation:       8,
-    shadowColor:     "#c0392b",
-    shadowOffset:    { width: 0, height: 4 },
-    shadowOpacity:   0.5,
-    shadowRadius:    8,
   },
   botonDeshabilitado: {
     backgroundColor: "#1a1a1a",
     borderColor:     "#333",
     elevation:       0,
-    shadowOpacity:   0,
   },
   letraA: {
     color:      "#ffffff",
-    fontSize:   64,
+    fontSize:   72,
     fontWeight: "bold",
-    lineHeight: 70,
+    lineHeight: 78,
   },
   etiqueta: {
     color:         "rgba(255,255,255,0.6)",
     fontSize:      14,
     fontWeight:    "600",
-    letterSpacing: 2,
+    letterSpacing: 3,
+    marginTop:     4,
   },
 });

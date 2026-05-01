@@ -1,18 +1,18 @@
 import React, { useRef } from "react";
 import {
   View,
-  TouchableOpacity,
   Text,
   StyleSheet,
   Animated,
-  Dimensions,
+  Pressable,
 } from "react-native";
 
 // =============================================================================
-// ControlDireccional — Botones izquierda y derecha grandes
+// ControlDireccional — Botones izquierda y derecha con soporte multi-touch
 //
-// Ocupan toda la mitad izquierda de la pantalla verticalmente.
-// Cada botón tiene su propia animación independiente.
+// PROBLEMA RESUELTO: TouchableOpacity no permite múltiples toques simultáneos.
+// SOLUCIÓN: Usamos Pressable que sí soporta multi-touch nativo en Android.
+// Esto permite presionar izquierda/derecha y salto al mismo tiempo.
 // =============================================================================
 
 const DIRECCIONES = {
@@ -20,13 +20,8 @@ const DIRECCIONES = {
   DERECHA:   "derecha",
 };
 
-const ESCALA_AL_PRESIONAR   = 0.92;
+const ESCALA_AL_PRESIONAR   = 0.93;
 const DURACION_DE_ANIMACION = 60;
-
-// Calculamos el alto disponible para los botones
-const ALTO_DE_PANTALLA = Dimensions.get("window").height;
-// Cada botón ocupa casi la mitad del alto disponible
-const ALTO_DE_BOTON    = (ALTO_DE_PANTALLA - 60) / 2;
 
 export function ControlDireccional({ onPresionar, onSoltar, estaDeshabilitado }) {
   const escalaIzquierda = useRef(new Animated.Value(1)).current;
@@ -65,40 +60,51 @@ export function ControlDireccional({ onPresionar, onSoltar, estaDeshabilitado })
   }
 
   return (
-    // Los dos botones van UNO ARRIBA DEL OTRO (column)
-    // izquierda arriba, derecha abajo
     <View style={estilos.contenedor}>
 
+      {/* ── Botón Izquierda ────────────────────────────────────────────── */}
       <Animated.View style={[
         estilos.botonContenedor,
         { transform: [{ scale: escalaIzquierda }] },
       ]}>
-        <TouchableOpacity
+        {/*
+          Pressable con delayLongPress={100000} evita el menú contextual.
+          accessible={false} evita que el lector de pantalla interfiera.
+          El multi-touch funciona porque Pressable no bloquea otros toques.
+        */}
+        <Pressable
           style={[estilos.boton, estaDeshabilitado && estilos.botonDeshabilitado]}
           onPressIn={manejarPresionIzquierda}
           onPressOut={manejarSueltaIzquierda}
-          activeOpacity={1}
+          delayLongPress={100000}
+          accessible={false}
         >
           <Text style={estilos.flecha}>◀</Text>
           <Text style={estilos.etiqueta}>IZQ</Text>
-        </TouchableOpacity>
+        </Pressable>
       </Animated.View>
 
       <View style={estilos.separador} />
 
+      {/* ── Botón Derecha ──────────────────────────────────────────────── */}
       <Animated.View style={[
         estilos.botonContenedor,
         { transform: [{ scale: escalaDerecha }] },
       ]}>
-        <TouchableOpacity
-          style={[estilos.boton, estilos.botonDerecha, estaDeshabilitado && estilos.botonDeshabilitado]}
+        <Pressable
+          style={[
+            estilos.boton,
+            estilos.botonDerecha,
+            estaDeshabilitado && estilos.botonDeshabilitado,
+          ]}
           onPressIn={manejarPresionDerecha}
           onPressOut={manejarSueltaDerecha}
-          activeOpacity={1}
+          delayLongPress={100000}
+          accessible={false}
         >
           <Text style={estilos.flecha}>▶</Text>
           <Text style={estilos.etiqueta}>DER</Text>
-        </TouchableOpacity>
+        </Pressable>
       </Animated.View>
 
     </View>
@@ -108,26 +114,26 @@ export function ControlDireccional({ onPresionar, onSoltar, estaDeshabilitado })
 const estilos = StyleSheet.create({
   contenedor: {
     flex:          1,
-    flexDirection: "column", // Arriba izquierda, abajo derecha
-    padding:       8,
-    gap:           8,
+    flexDirection: "row",
+    padding:       10,
+    gap:           10,
   },
   botonContenedor: {
-    flex: 1, // Cada botón ocupa la mitad del espacio
+    flex: 1,
   },
   boton: {
     flex:            1,
-    borderRadius:    20,
+    borderRadius:    16,
     backgroundColor: "#1e3a5f",
     justifyContent:  "center",
     alignItems:      "center",
     borderWidth:     2,
-    borderColor:     "rgba(74,111,165,0.7)",
-    elevation:       6,
+    borderColor:     "rgba(74,111,165,0.8)",
+    elevation:       4,
   },
   botonDerecha: {
     backgroundColor: "#1a3a6f",
-    borderColor:     "rgba(52,152,219,0.7)",
+    borderColor:     "rgba(52,152,219,0.8)",
   },
   botonDeshabilitado: {
     backgroundColor: "#111",
@@ -136,15 +142,15 @@ const estilos = StyleSheet.create({
   },
   flecha: {
     color:    "#ffffff",
-    fontSize: 48,
+    fontSize: 52,
   },
   etiqueta: {
     color:      "rgba(255,255,255,0.5)",
     fontSize:   12,
-    marginTop:  4,
+    marginTop:  6,
     fontWeight: "600",
   },
   separador: {
-    height: 4,
+    width: 8,
   },
 });
