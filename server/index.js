@@ -50,8 +50,10 @@ servidorDeWebSockets.on("connection", (socketDelCliente) => {
 // =============================================================================
 function manejarConexionDelJuego(socketDelJuego) {
   console.log("🖥️  Juego conectado");
-  // Le mandamos el estado actual por si el juego se reconecta
   socketDelJuego.emit("actualizacion_de_jugadores", jugadoresConectados);
+  
+  // NUEVO: Le enviamos la IP al Host para que la muestre en la pantalla de inicio
+  socketDelJuego.emit("info_servidor", { ip: obtenerIpLocal() });
 
   socketDelJuego.on("disconnect", () => {
     console.log("🖥️  Juego desconectado");

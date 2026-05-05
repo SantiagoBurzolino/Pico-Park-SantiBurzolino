@@ -845,11 +845,16 @@ function activarPantallaDeVictoria() {
 
 function escucharEventosDelServidor() {
   socketDelJuego.on("jugador_asignado", manejarAsignacionDeJugador);
-  socketDelJuego.on(
-    "actualizacion_de_jugadores",
-    manejarActualizacionDeJugadores,
-  );
+  socketDelJuego.on("actualizacion_de_jugadores", manejarActualizacionDeJugadores);
   socketDelJuego.on("tick_del_juego", manejarTickDelJuego);
+  
+  // NUEVO: Recibe la IP y la muestra en un texto del HTML
+  socketDelJuego.on("info_servidor", (info) => {
+    const textoIp = document.getElementById("texto-ip-servidor");
+    if (textoIp) {
+       textoIp.textContent = `IP para conectarse: ${info.ip}`;
+    }
+  });
 }
 
 function manejarAsignacionDeJugador(datosDelJugador) {
