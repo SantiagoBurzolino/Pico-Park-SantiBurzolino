@@ -105,11 +105,22 @@ function registrarNuevoJugador(socketDelJugador) {
 }
 
 function construirDatosDelJugador(idDelSocket) {
-  const indiceDeColor = Object.keys(jugadoresConectados).length;
+  // Buscamos qué índices de colores ya están ocupados por los conectados
+  const indicesEnUso = Object.values(jugadoresConectados).map(j => j.indiceDeColor);
+  
+  // Buscamos el primer número del 0 al 3 que esté libre
+  let indiceLibre = 0;
+  for (let i = 0; i < CANTIDAD_MAXIMA_DE_JUGADORES; i++) {
+    if (!indicesEnUso.includes(i)) {
+      indiceLibre = i;
+      break;
+    }
+  }
+
   return {
     id:            idDelSocket,
-    color:         COLORES_DE_JUGADORES[indiceDeColor],
-    indiceDeColor: indiceDeColor,
+    color:         COLORES_DE_JUGADORES[indiceLibre],
+    indiceDeColor: indiceLibre,
     input: {
       izquierda: false,
       derecha:   false,

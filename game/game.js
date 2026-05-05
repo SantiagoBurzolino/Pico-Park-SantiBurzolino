@@ -4,26 +4,26 @@
 // CONSTANTES
 // Manual: sin números mágicos sueltos. Cada valor tiene nombre descriptivo.
 // =============================================================================
-const ANCHO_DEL_CANVAS               = window.innerWidth;
-const ALTO_DEL_CANVAS                = window.innerHeight;
-const GROSOR_DE_PAREDES              = 50;
-const TAMANO_DEL_JUGADOR             = 24;
-const LADO_DEL_CUADRADO              = TAMANO_DEL_JUGADOR * 2;
-const VELOCIDAD_DE_MOVIMIENTO        = 0.006;
+const ANCHO_DEL_CANVAS = window.innerWidth;
+const ALTO_DEL_CANVAS = window.innerHeight;
+const GROSOR_DE_PAREDES = 50;
+const TAMANO_DEL_JUGADOR = 24;
+const LADO_DEL_CUADRADO = TAMANO_DEL_JUGADOR * 2;
+const VELOCIDAD_DE_MOVIMIENTO = 0.006;
 // En el aire la fuerza es menor: saltar+moverse no da ventaja de velocidad
 const VELOCIDAD_DE_MOVIMIENTO_EN_AIRE = 0.003;
-const FUERZA_DE_SALTO                = 0.028;
-const UMBRAL_DE_VELOCIDAD_EN_SUELO   = 0.4;
-const VELOCIDAD_MAXIMA_HORIZONTAL    = 5;
+const FUERZA_DE_SALTO = 0.028;
+const UMBRAL_DE_VELOCIDAD_EN_SUELO = 0.4;
+const VELOCIDAD_MAXIMA_HORIZONTAL = 5;
 // Límite de velocidad en el aire (menor que en suelo para consistencia)
-const VELOCIDAD_MAXIMA_EN_AIRE       = 4;
+const VELOCIDAD_MAXIMA_EN_AIRE = 4;
 const DISTANCIA_DE_LIGADURA_DE_LLAVE = TAMANO_DEL_JUGADOR + 18;
-const CANTIDAD_TOTAL_DE_NIVELES      = 2;
+const CANTIDAD_TOTAL_DE_NIVELES = 2;
 // La rúbrica exige 4 jugadores en la salida para ganar
 const CANTIDAD_DE_JUGADORES_PARA_GANAR = 4;
-const TIPO_DE_CLIENTE_JUEGO          = "juego";
-const COLORES_DE_JUGADORES           = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12"];
-const FUERZA_DE_EMPUJE_DE_CAJA       = 0.003;
+const TIPO_DE_CLIENTE_JUEGO = "juego";
+const COLORES_DE_JUGADORES = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12"];
+const FUERZA_DE_EMPUJE_DE_CAJA = 0.003;
 
 const TITULOS_DE_NIVELES = {
   1: "Nivel 1 — La llave perdida",
@@ -34,7 +34,8 @@ const TITULOS_DE_NIVELES = {
 // ALIASES DE MATTER.JS
 // Destructuring: sacamos solo lo que vamos a usar del objeto global Matter.
 // =============================================================================
-const { Engine, Render, Runner, Bodies, Body, World, Events, Constraint } = Matter;
+const { Engine, Render, Runner, Bodies, Body, World, Events, Constraint } =
+  Matter;
 
 // =============================================================================
 // ESTADO GLOBAL DEL JUEGO
@@ -44,21 +45,21 @@ let renderizador;
 let ejecutorDeFisica;
 let mundoDeFisica;
 
-let nivelActual             = 1;
-let nivelSeleccionado       = 1;
-let jugadoresEnPantalla     = {};
-let inputsDeJugadores       = {};
-let llaveDelNivel           = null;
-let zonaDeSalidaDelNivel    = null;
-let cuerposDePuerta         = [];
-let cajaEmpujable           = null;
+let nivelActual = 1;
+let nivelSeleccionado = 1;
+let jugadoresEnPantalla = {};
+let inputsDeJugadores = {};
+let llaveDelNivel = null;
+let zonaDeSalidaDelNivel = null;
+let cuerposDePuerta = [];
+let cajaEmpujable = null;
 let jugadorQueCargarLaLlave = null;
-let ligaduraDeLlave         = null;
-let elNivelYaTermino        = false;
-let elJuegoEstaEnCurso      = false;
-let nivel1Completado        = false;
+let ligaduraDeLlave = null;
+let elNivelYaTermino = false;
+let elJuegoEstaEnCurso = false;
+let nivel1Completado = false;
 // Evita crear dos loops paralelos si el juego se inicia dos veces
-let elLoopFueIniciado       = false;
+let elLoopFueIniciado = false;
 
 // =============================================================================
 // CONEXIÓN CON EL SERVIDOR
@@ -76,22 +77,22 @@ socketDelJuego.on("connect", () => {
 // Cuadraditos flotantes puramente visuales en la pantalla de inicio.
 // =============================================================================
 const CANTIDAD_DE_CUADRADITOS_DE_FONDO = 14;
-const cuadraditosDeAnimacion           = [];
+const cuadraditosDeAnimacion = [];
 
 function inicializarAnimacionDeFondo() {
-  const canvas   = document.getElementById("canvas-de-fondo-inicio");
-  canvas.width   = window.innerWidth;
-  canvas.height  = window.innerHeight;
+  const canvas = document.getElementById("canvas-de-fondo-inicio");
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
   const contexto = canvas.getContext("2d");
 
   for (let i = 0; i < CANTIDAD_DE_CUADRADITOS_DE_FONDO; i++) {
     cuadraditosDeAnimacion.push({
-      x:        Math.random() * canvas.width,
-      y:        Math.random() * canvas.height,
-      vx:       (Math.random() - 0.5) * 1.5,
-      vy:       (Math.random() - 0.5) * 1.5,
-      lado:     Math.random() * 28 + 16,
-      color:    COLORES_DE_JUGADORES[i % COLORES_DE_JUGADORES.length],
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      vx: (Math.random() - 0.5) * 1.5,
+      vy: (Math.random() - 0.5) * 1.5,
+      lado: Math.random() * 28 + 16,
+      color: COLORES_DE_JUGADORES[i % COLORES_DE_JUGADORES.length],
       opacidad: Math.random() * 0.25 + 0.08,
     });
   }
@@ -106,24 +107,31 @@ function animarCuadraditosDeFondo(canvas, contexto) {
     cuadradito.x += cuadradito.vx;
     cuadradito.y += cuadradito.vy;
 
-    const tocaBordeDerecho   = cuadradito.x + cuadradito.lado > canvas.width;
+    const tocaBordeDerecho = cuadradito.x + cuadradito.lado > canvas.width;
     const tocaBordeIzquierdo = cuadradito.x < 0;
-    const tocaBordeAbajo     = cuadradito.y + cuadradito.lado > canvas.height;
-    const tocaBordeArriba    = cuadradito.y < 0;
+    const tocaBordeAbajo = cuadradito.y + cuadradito.lado > canvas.height;
+    const tocaBordeArriba = cuadradito.y < 0;
 
-    if (tocaBordeDerecho  || tocaBordeIzquierdo) cuadradito.vx *= -1;
-    if (tocaBordeAbajo    || tocaBordeArriba)    cuadradito.vy *= -1;
+    if (tocaBordeDerecho || tocaBordeIzquierdo) cuadradito.vx *= -1;
+    if (tocaBordeAbajo || tocaBordeArriba) cuadradito.vy *= -1;
 
     contexto.globalAlpha = cuadradito.opacidad;
-    contexto.fillStyle   = cuadradito.color;
+    contexto.fillStyle = cuadradito.color;
     contexto.beginPath();
-    contexto.roundRect(cuadradito.x, cuadradito.y, cuadradito.lado, cuadradito.lado, 4);
+    contexto.roundRect(
+      cuadradito.x,
+      cuadradito.y,
+      cuadradito.lado,
+      cuadradito.lado,
+      4,
+    );
     contexto.fill();
   });
 
   contexto.globalAlpha = 1;
 
-  const pantallaEsVisible = document.getElementById("pantalla-de-inicio")
+  const pantallaEsVisible = document
+    .getElementById("pantalla-de-inicio")
     .classList.contains("visible");
   if (pantallaEsVisible) {
     requestAnimationFrame(() => animarCuadraditosDeFondo(canvas, contexto));
@@ -152,7 +160,7 @@ function desbloquearNivel2EnPantallaDeInicio() {
   boton.classList.remove("bloqueado");
   boton.classList.add("desbloqueado");
   boton.textContent = "🟢 Nivel 2";
-  boton.onclick     = () => seleccionarNivel(2);
+  boton.onclick = () => seleccionarNivel(2);
 }
 
 function actualizarIndicadoresDeJugadoresEnInicio(jugadoresDelServidor) {
@@ -187,18 +195,18 @@ function iniciarJuego() {
 // =============================================================================
 
 function inicializarMotorDeFisica() {
-  motorDeFisica    = Engine.create();
-  mundoDeFisica    = motorDeFisica.world;
+  motorDeFisica = Engine.create();
+  mundoDeFisica = motorDeFisica.world;
   ejecutorDeFisica = Runner.create();
 }
 
 function inicializarRenderizador() {
   renderizador = Render.create({
     element: document.body,
-    engine:  motorDeFisica,
+    engine: motorDeFisica,
     options: {
-      width:      ANCHO_DEL_CANVAS,
-      height:     ALTO_DEL_CANVAS,
+      width: ANCHO_DEL_CANVAS,
+      height: ALTO_DEL_CANVAS,
       wireframes: false,
       background: "#1a1a2e",
     },
@@ -223,7 +231,7 @@ function escucharBotonDeInicio() {
 function iniciarPartida(numeroDeNivel) {
   if (elJuegoEstaEnCurso) return;
 
-  nivelActual        = numeroDeNivel;
+  nivelActual = numeroDeNivel;
   elJuegoEstaEnCurso = true;
 
   ocultarPantallaDeInicio();
@@ -242,7 +250,7 @@ function ocultarPantallaDeInicio() {
 
 function mostrarPantallaDeInicio() {
   document.getElementById("pantalla-de-inicio").classList.add("visible");
-  const canvas   = document.getElementById("canvas-de-fondo-inicio");
+  const canvas = document.getElementById("canvas-de-fondo-inicio");
   const contexto = canvas.getContext("2d");
   animarCuadraditosDeFondo(canvas, contexto);
 }
@@ -271,34 +279,45 @@ function limpiarMundoActual() {
   }
   World.clear(mundoDeFisica);
   Engine.clear(motorDeFisica);
-  llaveDelNivel           = null;
-  zonaDeSalidaDelNivel    = null;
+  llaveDelNivel = null;
+  zonaDeSalidaDelNivel = null;
   jugadorQueCargarLaLlave = null;
-  cuerposDePuerta         = [];
-  cajaEmpujable           = null;
+  cuerposDePuerta = [];
+  cajaEmpujable = null;
 }
 
 function construirEstructuraBasicaDelMundo() {
   const piso = crearCuerpoEstatico(
     ANCHO_DEL_CANVAS / 2,
     ALTO_DEL_CANVAS - 10,
-    ANCHO_DEL_CANVAS, 20,
-    "piso", "#4a6fa5"
+    ANCHO_DEL_CANVAS,
+    20,
+    "piso",
+    "#4a6fa5",
   );
   const paredIzquierda = crearCuerpoEstatico(
-    -GROSOR_DE_PAREDES / 2, ALTO_DEL_CANVAS / 2,
-    GROSOR_DE_PAREDES, ALTO_DEL_CANVAS,
-    "paredIzquierda", "#2c3e50"
+    -GROSOR_DE_PAREDES / 2,
+    ALTO_DEL_CANVAS / 2,
+    GROSOR_DE_PAREDES,
+    ALTO_DEL_CANVAS,
+    "paredIzquierda",
+    "#2c3e50",
   );
   const paredDerecha = crearCuerpoEstatico(
-    ANCHO_DEL_CANVAS + GROSOR_DE_PAREDES / 2, ALTO_DEL_CANVAS / 2,
-    GROSOR_DE_PAREDES, ALTO_DEL_CANVAS,
-    "paredDerecha", "#2c3e50"
+    ANCHO_DEL_CANVAS + GROSOR_DE_PAREDES / 2,
+    ALTO_DEL_CANVAS / 2,
+    GROSOR_DE_PAREDES,
+    ALTO_DEL_CANVAS,
+    "paredDerecha",
+    "#2c3e50",
   );
   const techo = crearCuerpoEstatico(
-    ANCHO_DEL_CANVAS / 2, -GROSOR_DE_PAREDES / 2,
-    ANCHO_DEL_CANVAS, GROSOR_DE_PAREDES,
-    "techo", "#2c3e50"
+    ANCHO_DEL_CANVAS / 2,
+    -GROSOR_DE_PAREDES / 2,
+    ANCHO_DEL_CANVAS,
+    GROSOR_DE_PAREDES,
+    "techo",
+    "#2c3e50",
   );
   World.add(mundoDeFisica, [piso, paredIzquierda, paredDerecha, techo]);
 }
@@ -315,7 +334,7 @@ function construirNivelUno() {
   const ah = ALTO_DEL_CANVAS;
 
   const plataformas = [
-    crearPlataforma(aw * 0.18, ah * 0.80, aw * 0.16, 18, "#4a6fa5"),
+    crearPlataforma(aw * 0.18, ah * 0.8, aw * 0.16, 18, "#4a6fa5"),
     crearPlataforma(aw * 0.35, ah * 0.67, aw * 0.14, 18, "#4a6fa5"),
     crearPlataforma(aw * 0.52, ah * 0.54, aw * 0.14, 18, "#4a6fa5"),
     crearPlataforma(aw * 0.69, ah * 0.41, aw * 0.14, 18, "#4a6fa5"),
@@ -325,9 +344,7 @@ function construirNivelUno() {
 
   llaveDelNivel = crearLlave(aw * 0.84, ah * 0.28 - 22);
 
-  zonaDeSalidaDelNivel = crearZonaDeSalida(
-    aw * 0.08, ah * 0.91, aw * 0.13, 55
-  );
+  zonaDeSalidaDelNivel = crearZonaDeSalida(aw * 0.08, ah * 0.91, aw * 0.13, 55);
 
   World.add(mundoDeFisica, [
     ...plataformas,
@@ -346,7 +363,7 @@ function construirNivelDos() {
   const ah = ALTO_DEL_CANVAS;
 
   const plataformas = [
-    crearPlataforma(aw * 0.20, ah * 0.75, aw * 0.16, 18, "#4a6fa5"),
+    crearPlataforma(aw * 0.2, ah * 0.75, aw * 0.16, 18, "#4a6fa5"),
     crearPlataforma(aw * 0.45, ah * 0.62, aw * 0.14, 18, "#8e44ad"),
     crearPlataforma(aw * 0.68, ah * 0.48, aw * 0.14, 18, "#8e44ad"),
     // Plataforma roja alta — necesita caja + apilarse
@@ -356,9 +373,7 @@ function construirNivelDos() {
   cajaEmpujable = crearCajaEmpujable(aw * 0.35, ah * 0.88);
   llaveDelNivel = crearLlave(aw * 0.85, ah * 0.28 - 22);
 
-  zonaDeSalidaDelNivel = crearZonaDeSalida(
-    aw * 0.08, ah * 0.91, aw * 0.13, 55
-  );
+  zonaDeSalidaDelNivel = crearZonaDeSalida(aw * 0.08, ah * 0.91, aw * 0.13, 55);
 
   World.add(mundoDeFisica, [
     ...plataformas,
@@ -376,20 +391,20 @@ function construirNivelDos() {
 function crearCuerpoEstatico(x, y, ancho, alto, etiqueta, color) {
   return Bodies.rectangle(x, y, ancho, alto, {
     isStatic: true,
-    label:    etiqueta,
-    render:   { fillStyle: color },
+    label: etiqueta,
+    render: { fillStyle: color },
   });
 }
 
 function crearPlataforma(x, y, ancho, alto, color) {
   return Bodies.rectangle(x, y, ancho, alto, {
     isStatic: true,
-    label:    "plataforma",
+    label: "plataforma",
     friction: 0.8,
     render: {
-      fillStyle:   color,
+      fillStyle: color,
       strokeStyle: "rgba(255,255,255,0.15)",
-      lineWidth:   1,
+      lineWidth: 1,
     },
   });
 }
@@ -399,11 +414,11 @@ function crearLlave(x, y) {
   return Bodies.rectangle(x, y, 34, 14, {
     isStatic: true,
     isSensor: true,
-    label:    "llave",
+    label: "llave",
     render: {
-      fillStyle:   "#f1c40f",
+      fillStyle: "#f1c40f",
       strokeStyle: "#f39c12",
-      lineWidth:   3,
+      lineWidth: 3,
     },
   });
 }
@@ -413,11 +428,11 @@ function crearZonaDeSalida(x, y, ancho, alto) {
   return Bodies.rectangle(x, y, ancho, alto, {
     isStatic: true,
     isSensor: true,
-    label:    "zonaDeSalida",
+    label: "zonaDeSalida",
     render: {
-      fillStyle:   "rgba(39,174,96,0.30)",
+      fillStyle: "rgba(39,174,96,0.30)",
       strokeStyle: "#2ecc71",
-      lineWidth:   2,
+      lineWidth: 2,
     },
   });
 }
@@ -431,16 +446,16 @@ function crearZonaDeSalida(x, y, ancho, alto) {
 function crearCajaEmpujable(x, y) {
   const LADO_DE_LA_CAJA = 60;
   return Bodies.rectangle(x, y, LADO_DE_LA_CAJA, LADO_DE_LA_CAJA, {
-    label:       "cajaEmpujable",
-    isStatic:    false,
-    friction:    0.8,
+    label: "cajaEmpujable",
+    isStatic: false,
+    friction: 0.8,
     restitution: 0.1,
-    density:     0.003,
-    inertia:     Infinity,
+    density: 0.003,
+    inertia: Infinity,
     render: {
-      fillStyle:   "#795548",
+      fillStyle: "#795548",
       strokeStyle: "#5d4037",
-      lineWidth:   3,
+      lineWidth: 3,
     },
   });
 }
@@ -461,28 +476,30 @@ function agregarJugadorAlMundo(idDelJugador, colorDelJugador, indiceDeColor) {
   const posicionInicialY = ALTO_DEL_CANVAS - 60;
 
   const cuerpoDelJugador = Bodies.rectangle(
-    posicionInicialX, posicionInicialY,
-    LADO_DEL_CUADRADO, LADO_DEL_CUADRADO,
+    posicionInicialX,
+    posicionInicialY,
+    LADO_DEL_CUADRADO,
+    LADO_DEL_CUADRADO,
     {
-      label:       `jugador_${idDelJugador}`,
+      label: `jugador_${idDelJugador}`,
       frictionAir: 0.08,
-      friction:    0.6,
+      friction: 0.6,
       restitution: 0.0,
       // inertia Infinity: no rota al chocar → se apilan como bloques
-      inertia:     Infinity,
+      inertia: Infinity,
       render: {
-        fillStyle:   colorDelJugador,
+        fillStyle: colorDelJugador,
         strokeStyle: "rgba(255,255,255,0.5)",
-        lineWidth:   3,
+        lineWidth: 3,
       },
-    }
+    },
   );
 
   jugadoresEnPantalla[idDelJugador] = cuerpoDelJugador;
-  inputsDeJugadores[idDelJugador]   = {
+  inputsDeJugadores[idDelJugador] = {
     izquierda: false,
-    derecha:   false,
-    salto:     false,
+    derecha: false,
+    salto: false,
   };
   World.add(mundoDeFisica, cuerpoDelJugador);
 }
@@ -506,6 +523,9 @@ function reposicionarJugadoresExistentes() {
       y: ALTO_DEL_CANVAS - 60,
     });
     Body.setVelocity(cuerpo, { x: 0, y: 0 });
+    
+    // NUEVO: Volvemos a agregar el cuerpo al mundo físico porque limpiarMundoActual() lo había borrado
+    World.add(mundoDeFisica, cuerpo); 
   });
 }
 
@@ -528,6 +548,9 @@ function iniciarLoopPrincipal() {
 }
 
 function aplicarInputsATodosLosJugadores() {
+  // NUEVO: Si el nivel terminó, ignoramos los botones del gamepad
+  if (elNivelYaTermino) return;
+
   Object.entries(inputsDeJugadores).forEach(([id, inputActual]) => {
     const cuerpo = jugadoresEnPantalla[id];
     if (cuerpo === undefined) return;
@@ -544,7 +567,7 @@ function aplicarInputsATodosLosJugadores() {
  * Esto evita que saltar+moverse sea más rápido que solo moverse.
  */
 function aplicarMovimientoHorizontal(cuerpo, inputActual) {
-  const estaEnElAire  = !verificarSiJugadorEstaEnSuelo(cuerpo);
+  const estaEnElAire = !verificarSiJugadorEstaEnSuelo(cuerpo);
   const fuerzaAplicar = estaEnElAire
     ? VELOCIDAD_DE_MOVIMIENTO_EN_AIRE
     : VELOCIDAD_DE_MOVIMIENTO;
@@ -563,7 +586,7 @@ function aplicarMovimientoHorizontal(cuerpo, inputActual) {
  * El movimiento horizontal funciona simultáneamente sin conflicto.
  */
 function aplicarSaltoSiCorresponde(cuerpo, inputActual) {
-  const estaEnElSuelo      = verificarSiJugadorEstaEnSuelo(cuerpo);
+  const estaEnElSuelo = verificarSiJugadorEstaEnSuelo(cuerpo);
   const puedeEjecutarSalto = inputActual.salto && estaEnElSuelo;
   if (!puedeEjecutarSalto) return;
 
@@ -578,7 +601,7 @@ function aplicarSaltoSiCorresponde(cuerpo, inputActual) {
  * Consistente con la fuerza reducida en el aire.
  */
 function limitarVelocidadHorizontal(cuerpo) {
-  const velocidad    = cuerpo.velocity;
+  const velocidad = cuerpo.velocity;
   const estaEnElAire = !verificarSiJugadorEstaEnSuelo(cuerpo);
   const limiteActual = estaEnElAire
     ? VELOCIDAD_MAXIMA_EN_AIRE
@@ -604,7 +627,7 @@ function verificarSiJugadorEstaEnSuelo(cuerpo) {
 
 function verificarJugadoresFueraDelMapa() {
   Object.keys(jugadoresEnPantalla).forEach((id) => {
-    const cuerpo           = jugadoresEnPantalla[id];
+    const cuerpo = jugadoresEnPantalla[id];
     const cayoFueraDelMapa = cuerpo.position.y > ALTO_DEL_CANVAS + 100;
     if (!cayoFueraDelMapa) return;
 
@@ -627,17 +650,20 @@ function aplicarFuerzasEnCaja() {
     const cuerpoDelJugador = jugadoresEnPantalla[id];
     if (cuerpoDelJugador === undefined) return;
 
-    const estaCercaDeLaCaja = verificarSiJugadorEstaCercaDeCaja(cuerpoDelJugador);
+    const estaCercaDeLaCaja =
+      verificarSiJugadorEstaCercaDeCaja(cuerpoDelJugador);
     if (!estaCercaDeLaCaja) return;
 
     if (inputActual.derecha) {
       Body.applyForce(cajaEmpujable, cajaEmpujable.position, {
-        x: FUERZA_DE_EMPUJE_DE_CAJA, y: 0,
+        x: FUERZA_DE_EMPUJE_DE_CAJA,
+        y: 0,
       });
     }
     if (inputActual.izquierda) {
       Body.applyForce(cajaEmpujable, cajaEmpujable.position, {
-        x: -FUERZA_DE_EMPUJE_DE_CAJA, y: 0,
+        x: -FUERZA_DE_EMPUJE_DE_CAJA,
+        y: 0,
       });
     }
   });
@@ -645,9 +671,16 @@ function aplicarFuerzasEnCaja() {
 
 function verificarSiJugadorEstaCercaDeCaja(cuerpoDelJugador) {
   const DISTANCIA_MAXIMA_DE_EMPUJE = LADO_DEL_CUADRADO + 40;
-  const diferenciaEnX = Math.abs(cuerpoDelJugador.position.x - cajaEmpujable.position.x);
-  const diferenciaEnY = Math.abs(cuerpoDelJugador.position.y - cajaEmpujable.position.y);
-  return diferenciaEnX < DISTANCIA_MAXIMA_DE_EMPUJE && diferenciaEnY < DISTANCIA_MAXIMA_DE_EMPUJE;
+  const diferenciaEnX = Math.abs(
+    cuerpoDelJugador.position.x - cajaEmpujable.position.x,
+  );
+  const diferenciaEnY = Math.abs(
+    cuerpoDelJugador.position.y - cajaEmpujable.position.y,
+  );
+  return (
+    diferenciaEnX < DISTANCIA_MAXIMA_DE_EMPUJE &&
+    diferenciaEnY < DISTANCIA_MAXIMA_DE_EMPUJE
+  );
 }
 
 // =============================================================================
@@ -656,13 +689,13 @@ function verificarSiJugadorEstaCercaDeCaja(cuerpoDelJugador) {
 
 function crearLigaduraDeLlaveConJugador(cuerpoDelPortador) {
   const nuevaLigadura = Constraint.create({
-    bodyA:     cuerpoDelPortador,
-    bodyB:     llaveDelNivel,
-    pointA:    { x: 0, y: -DISTANCIA_DE_LIGADURA_DE_LLAVE },
-    pointB:    { x: 0, y: 0 },
+    bodyA: cuerpoDelPortador,
+    bodyB: llaveDelNivel,
+    pointA: { x: 0, y: -DISTANCIA_DE_LIGADURA_DE_LLAVE },
+    pointB: { x: 0, y: 0 },
     stiffness: 1,
-    length:    0,
-    render:    { visible: true, strokeStyle: "#f1c40f", lineWidth: 2 },
+    length: 0,
+    render: { visible: true, strokeStyle: "#f1c40f", lineWidth: 2 },
   });
 
   Body.setStatic(llaveDelNivel, false);
@@ -712,7 +745,7 @@ function intentarRecogerLlave(cuerpoDelJugador) {
   if (jugadorQueCargarLaLlave !== null) return;
 
   const idDelJugador = Object.keys(jugadoresEnPantalla).find(
-    (id) => jugadoresEnPantalla[id] === cuerpoDelJugador
+    (id) => jugadoresEnPantalla[id] === cuerpoDelJugador,
   );
   if (idDelJugador === undefined) return;
 
@@ -733,18 +766,24 @@ function intentarRecogerLlave(cuerpoDelJugador) {
 
 function verificarCondicionesDeVictoria() {
   if (elNivelYaTermino) return;
-  
+
   // Guardamos la cantidad de jugadores actuales
   const cantidadDeJugadores = Object.keys(jugadoresEnPantalla).length;
   if (cantidadDeJugadores === 0) return; // Si no hay nadie, no se puede ganar
 
   if (!llaveDelNivel || !zonaDeSalidaDelNivel) return;
 
-  const alguienTieneLaLlave  = jugadorQueCargarLaLlave !== null;
+  const alguienTieneLaLlave = jugadorQueCargarLaLlave !== null;
   const todosEstanEnLaSalida = verificarSiTodosEstanEnZonaDeSalida();
 
   if (alguienTieneLaLlave && todosEstanEnLaSalida) {
     elNivelYaTermino = true;
+
+    // NUEVO: Frenamos a todos a cero para que no sigan de largo
+    Object.values(jugadoresEnPantalla).forEach((cuerpo) => {
+      Matter.Body.setVelocity(cuerpo, { x: 0, y: 0 });
+    });
+
     if (nivelActual === 1) nivel1Completado = true;
     setTimeout(() => activarPantallaDeVictoria(), 600);
   }
@@ -759,7 +798,7 @@ function verificarSiTodosEstanEnZonaDeSalida() {
 
   // Verificamos que absolutamente todos los IDs conectados estén tocando la zona
   return ids.every((id) =>
-    verificarSiCuerpoEstaEnZona(jugadoresEnPantalla[id], zonaDeSalidaDelNivel)
+    verificarSiCuerpoEstaEnZona(jugadoresEnPantalla[id], zonaDeSalidaDelNivel),
   );
 }
 
@@ -776,11 +815,14 @@ function verificarSiCuerpoEstaEnZona(cuerpo, zona) {
 function activarPantallaDeVictoria() {
   const esElUltimoNivel = nivelActual === CANTIDAD_TOTAL_DE_NIVELES;
 
-  document.getElementById("texto-de-victoria").textContent =
-    esElUltimoNivel ? "🏆 ¡Juego completado!" : "🎉 ¡Nivel completado!";
+  document.getElementById("texto-de-victoria").textContent = esElUltimoNivel
+    ? "🏆 ¡Juego completado!"
+    : "🎉 ¡Nivel completado!";
 
-  const boton       = document.getElementById("boton-para-siguiente-nivel");
-  boton.textContent = esElUltimoNivel ? "Volver al inicio" : "Siguiente Nivel →";
+  const boton = document.getElementById("boton-para-siguiente-nivel");
+  boton.textContent = esElUltimoNivel
+    ? "Volver al inicio"
+    : "Siguiente Nivel →";
 
   boton.onclick = () => {
     document.getElementById("pantalla-de-victoria").classList.remove("visible");
@@ -802,16 +844,19 @@ function activarPantallaDeVictoria() {
 // =============================================================================
 
 function escucharEventosDelServidor() {
-  socketDelJuego.on("jugador_asignado",           manejarAsignacionDeJugador);
-  socketDelJuego.on("actualizacion_de_jugadores", manejarActualizacionDeJugadores);
-  socketDelJuego.on("tick_del_juego",             manejarTickDelJuego);
+  socketDelJuego.on("jugador_asignado", manejarAsignacionDeJugador);
+  socketDelJuego.on(
+    "actualizacion_de_jugadores",
+    manejarActualizacionDeJugadores,
+  );
+  socketDelJuego.on("tick_del_juego", manejarTickDelJuego);
 }
 
 function manejarAsignacionDeJugador(datosDelJugador) {
   agregarJugadorAlMundo(
     datosDelJugador.id,
     datosDelJugador.color,
-    datosDelJugador.indiceDeColor
+    datosDelJugador.indiceDeColor,
   );
 }
 
@@ -845,7 +890,7 @@ function manejarTickDelJuego(estadoDelJuego) {
     if (!inputsDeJugadores[id]) return;
 
     inputsDeJugadores[id].izquierda = inputDelServidor.izquierda;
-    inputsDeJugadores[id].derecha   = inputDelServidor.derecha;
+    inputsDeJugadores[id].derecha = inputDelServidor.derecha;
 
     if (inputDelServidor.salto) {
       inputsDeJugadores[id].salto = true;
@@ -861,7 +906,7 @@ function actualizarPanelDeJugadores(jugadoresDelServidor) {
   const lista = document.getElementById("lista-de-jugadores");
   lista.innerHTML = "";
   Object.values(jugadoresDelServidor).forEach((datos, i) => {
-    const div     = document.createElement("div");
+    const div = document.createElement("div");
     div.className = "indicador-de-jugador";
     div.innerHTML = `
       <span class="circulo-de-color-del-jugador"
