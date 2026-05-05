@@ -528,9 +528,6 @@ function iniciarLoopPrincipal() {
 }
 
 function aplicarInputsATodosLosJugadores() {
-  // NUEVO: Si el nivel terminó, ignoramos los botones del gamepad
-  if (elNivelYaTermino) return; 
-
   Object.entries(inputsDeJugadores).forEach(([id, inputActual]) => {
     const cuerpo = jugadoresEnPantalla[id];
     if (cuerpo === undefined) return;
