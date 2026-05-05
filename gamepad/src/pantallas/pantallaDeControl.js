@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -21,6 +21,14 @@ import { useConexionAlServidor } from "../hooks/useConexionAlServidor";
 // La solución es guardar esas funciones en refs y acceder a ellas
 // desde el PanResponder a través de las refs.
 // Así el PanResponder siempre usa la versión más reciente.
+//
+// Layout en landscape:
+// ┌──────────────────────────────────────────────────────┐
+// │ ● Conectado    192.168.x.x    [COLOR]           [✕] │
+// ├────────────────┬───────────────┬────────────────────┤
+// │   [ ◀ IZQ ]   │   [ DER ▶ ]  │    [  A SALTO ]    │
+// │   25% ancho    │   25% ancho  │    50% ancho        │
+// └────────────────┴───────────────┴────────────────────┘
 // =============================================================================
 
 const ALTO_DE_BARRA_DE_ESTADO = 48;
@@ -32,44 +40,46 @@ export function PantallaDeControl({ ipDelServidor, onDesconexion }) {
     juegoLleno,
     enviarKeydown,
     enviarKeyup,
-    solicitarInicio,
     desconectar,
+    // solicitarInicio eliminado — el juego inicia desde la PC
   } = useConexionAlServidor(ipDelServidor);
 
-  // Estado actual de las teclas presionadas
+  // Guardamos el estado de las teclas sin provocar re-renders
   const estadoDeTeclas = useRef({
     izquierda: false,
     derecha:   false,
     salto:     false,
   });
 
-  // Estado visual de los botones (para el feedback visual)
-  // Usamos un ref separado para poder forzar re-render cuando cambia
+  // Estado visual para el feedback de los botones al presionar
   const estadoVisual = useRef({
     izquierda: false,
     derecha:   false,
     salto:     false,
   });
 
-  // ── Refs para evitar stale closures ─────────────────────────────────────
-  // Guardamos las funciones y valores que cambian en refs.
-  // El PanResponder accede siempre a la versión más reciente.
-  const enviarKeydownRef   = useRef(enviarKeydown);
-  const enviarKeyupRef     = useRef(enviarKeyup);
-  const estaConectadoRef   = useRef(estaConectado);
+  // ── Refs para evitar stale closures ──────────────────────────────────────
+  // El PanResponder se crea una sola vez. Sin refs, usaría versiones
+  // viejas de enviarKeydown/enviarKeyup → los botones no responderían.
+  const enviarKeydownRef = useRef(enviarKeydown);
+  const enviarKeyupRef   = useRef(enviarKeyup);
+  const estaConectadoRef = useRef(estaConectado);
 
-  // Actualizamos los refs cada vez que cambian los valores
+  // Actualizamos los refs cada vez que cambian los valores del hook
   useEffect(() => { enviarKeydownRef.current = enviarKeydown; }, [enviarKeydown]);
   useEffect(() => { enviarKeyupRef.current   = enviarKeyup;   }, [enviarKeyup]);
   useEffect(() => { estaConectadoRef.current = estaConectado; }, [estaConectado]);
 
-  // Ref para forzar re-render cuando cambia el estado visual
+  // Para forzar re-render cuando cambia el estado visual de los botones
   const [, forzarRender] = React.useState(0);
   const actualizarVista  = () => forzarRender((n) => n + 1);
 
   useEffect(() => {
+    // Forzamos landscape al entrar al gamepad
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+    // Wake Lock: evita que la pantalla se apague durante el juego
     activateKeepAwakeAsync();
+
     return () => {
       ScreenOrientation.unlockAsync();
       deactivateKeepAwake();
@@ -79,11 +89,10 @@ export function PantallaDeControl({ ipDelServidor, onDesconexion }) {
   // ── Lógica de zonas táctiles ─────────────────────────────────────────────
 
   /**
-   * Determina qué zona táctil corresponde a una posición X en pantalla.
-   * Zonas:
-   *   0% - 25%  → izquierda
-   *   25% - 50% → derecha
-   *   50% - 100% → salto
+   * Determina en qué zona cayó un toque según su posición X en pantalla.
+   * 0-25%  → izquierda
+   * 25-50% → derecha
+   * 50-100% → salto
    */
   function obtenerZonaDeToque(toqueX) {
     const anchoDePantalla = Dimensions.get("window").width;
@@ -95,27 +104,27 @@ export function PantallaDeControl({ ipDelServidor, onDesconexion }) {
   }
 
   /**
-   * Procesa el estado actual de todos los dedos en pantalla.
-   * Compara con el estado anterior y envía keydown/keyup solo cuando cambia.
-   * Esto evita spam de eventos al servidor.
+   * Procesa todos los dedos activos en pantalla.
+   * Compara con el estado anterior y envía keydown/keyup solo cuando hay cambio.
+   * Evita spam de eventos al servidor.
    */
   function procesarToquesActivos(evento) {
-    // Accedemos a través del ref para tener el valor más reciente
     if (!estaConectadoRef.current) return;
 
     const toques       = evento.nativeEvent.touches;
     const zonasActivas = { izquierda: false, derecha: false, salto: false };
 
     for (let i = 0; i < toques.length; i++) {
-      const toque                = toques[i];
-      const estaEnAreaDeControl  = toque.pageY > ALTO_DE_BARRA_DE_ESTADO;
+      const toque               = toques[i];
+      // Ignoramos toques en la barra de estado superior
+      const estaEnAreaDeControl = toque.pageY > ALTO_DE_BARRA_DE_ESTADO;
       if (!estaEnAreaDeControl) continue;
 
-      const zona      = obtenerZonaDeToque(toque.pageX);
+      const zona         = obtenerZonaDeToque(toque.pageX);
       zonasActivas[zona] = true;
     }
 
-    const teclas = ["izquierda", "derecha", "salto"];
+    const teclas         = ["izquierda", "derecha", "salto"];
     let huboCambioVisual = false;
 
     teclas.forEach((tecla) => {
@@ -123,26 +132,25 @@ export function PantallaDeControl({ ipDelServidor, onDesconexion }) {
       const estaActiva   = zonasActivas[tecla];
 
       if (!estabaActiva && estaActiva) {
-        // Tecla recién presionada
+        // Tecla recién presionada → keydown
         enviarKeydownRef.current(tecla);
         estadoVisual.current[tecla] = true;
-        huboCambioVisual = true;
+        huboCambioVisual            = true;
       } else if (estabaActiva && !estaActiva) {
-        // Tecla recién soltada
+        // Tecla recién soltada → keyup
         enviarKeyupRef.current(tecla);
         estadoVisual.current[tecla] = false;
-        huboCambioVisual = true;
+        huboCambioVisual            = true;
       }
     });
 
     estadoDeTeclas.current = zonasActivas;
-
-    // Solo re-renderizamos si hubo cambio visual (feedback de botones)
     if (huboCambioVisual) actualizarVista();
   }
 
   /**
    * Suelta todas las teclas cuando se levantan todos los dedos.
+   * También se llama si el sistema interrumpe el gesto (notificación, llamada).
    */
   function soltarTodasLasTeclas() {
     if (!estaConectadoRef.current) return;
@@ -154,7 +162,7 @@ export function PantallaDeControl({ ipDelServidor, onDesconexion }) {
       if (estadoDeTeclas.current[tecla]) {
         enviarKeyupRef.current(tecla);
         estadoVisual.current[tecla] = false;
-        huboCambioVisual = true;
+        huboCambioVisual            = true;
       }
     });
 
@@ -163,8 +171,8 @@ export function PantallaDeControl({ ipDelServidor, onDesconexion }) {
   }
 
   // ── PanResponder ─────────────────────────────────────────────────────────
-  // Se crea una sola vez. Accede a las funciones a través de refs normales
-  // (no useRef de función) para evitar el problema de stale closures.
+  // Patrón "ref de función": actualizamos .current en cada render
+  // para que el PanResponder siempre llame a la versión más reciente.
   const refProcesarToques   = useRef(null);
   const refSoltarTeclas     = useRef(null);
   refProcesarToques.current = procesarToquesActivos;
@@ -172,8 +180,8 @@ export function PantallaDeControl({ ipDelServidor, onDesconexion }) {
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder:      () => true,
-      onMoveShouldSetPanResponder:       () => true,
+      onStartShouldSetPanResponder:        () => true,
+      onMoveShouldSetPanResponder:         () => true,
       onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponderCapture:  () => true,
       onPanResponderGrant:     (evt) => refProcesarToques.current(evt),
@@ -183,7 +191,7 @@ export function PantallaDeControl({ ipDelServidor, onDesconexion }) {
     })
   ).current;
 
-  // ── Estado visual ─────────────────────────────────────────────────────────
+  // ── Estado visual de la barra ─────────────────────────────────────────────
 
   const colorDelIndicador = estaConectado ? "#2ecc71" : juegoLleno ? "#f39c12" : "#e74c3c";
   const textoDeEstado     = juegoLleno
@@ -202,8 +210,10 @@ export function PantallaDeControl({ ipDelServidor, onDesconexion }) {
     <View style={estilos.contenedor}>
       <StatusBar hidden />
 
-      {/* ── Barra de estado ──────────────────────────────────────────── */}
+      {/* ── Barra de estado superior ─────────────────────────────────── */}
       <View style={estilos.barraDeEstado}>
+
+        {/* LED + texto de estado */}
         <View style={estilos.seccionDeEstado}>
           <View style={[estilos.led, { backgroundColor: colorDelIndicador }]} />
           <Text style={[estilos.textoDeEstado, { color: colorDelIndicador }]}>
@@ -211,29 +221,30 @@ export function PantallaDeControl({ ipDelServidor, onDesconexion }) {
           </Text>
         </View>
 
+        {/* IP del servidor */}
         <Text style={estilos.textoDeIp}>🖥️ {ipDelServidor}</Text>
 
+        {/* Círculo con el color asignado al jugador */}
         {colorAsignado && (
           <View style={[estilos.circuloDeColor, { backgroundColor: colorAsignado }]} />
         )}
 
-        <TouchableOpacity
-          style={[estilos.botonDeInicio, !estaConectado && estilos.botonDeshabilitado]}
-          onPress={solicitarInicio}
-          disabled={!estaConectado}
-        >
-          <Text style={estilos.textoDeInicio}>▶ INICIAR</Text>
-        </TouchableOpacity>
-
+        {/* Botón ✕ para desconectarse — siempre visible en la barra */}
         <TouchableOpacity style={estilos.botonDeDesconectar} onPress={manejarDesconexion}>
           <Text style={estilos.textoDeDesconectar}>✕</Text>
         </TouchableOpacity>
+
       </View>
 
-      {/* ── Área de control ──────────────────────────────────────────── */}
+      {/* ── Área de control con PanResponder ─────────────────────────── */}
+      {/*
+        Un único View que cubre toda el área de juego.
+        El PanResponder detecta TODOS los dedos simultáneamente.
+        Los hijos tienen pointerEvents="none" para no interceptar toques.
+      */}
       <View style={estilos.areaDeControl} {...panResponder.panHandlers}>
 
-        {/* Zona IZQ */}
+        {/* Zona IZQ — 25% del ancho */}
         <View style={estilos.zonaIzquierda} pointerEvents="none">
           <View style={[
             estilos.botonVisual,
@@ -244,7 +255,7 @@ export function PantallaDeControl({ ipDelServidor, onDesconexion }) {
           </View>
         </View>
 
-        {/* Zona DER */}
+        {/* Zona DER — 25% del ancho */}
         <View style={estilos.zonaMedio} pointerEvents="none">
           <View style={[
             estilos.botonVisual,
@@ -256,9 +267,10 @@ export function PantallaDeControl({ ipDelServidor, onDesconexion }) {
           </View>
         </View>
 
+        {/* Separador visual */}
         <View style={estilos.separadorVertical} pointerEvents="none" />
 
-        {/* Zona SALTO */}
+        {/* Zona SALTO — 50% del ancho */}
         <View style={estilos.zonaDerecha} pointerEvents="none">
           <View style={[
             estilos.botonVisualSalto,
@@ -271,9 +283,12 @@ export function PantallaDeControl({ ipDelServidor, onDesconexion }) {
 
       </View>
 
+      {/* Banner cuando la sala está llena */}
       {juegoLleno && (
         <View style={estilos.bannerDeLleno}>
-          <Text style={estilos.textoDeLleno}>Sala llena — máximo 4 jugadores</Text>
+          <Text style={estilos.textoDeLleno}>
+            Sala llena — máximo 4 jugadores
+          </Text>
         </View>
       )}
 
@@ -326,20 +341,6 @@ const estilos = StyleSheet.create({
     borderRadius: 9,
     borderWidth:  2,
     borderColor:  "rgba(255,255,255,0.4)",
-  },
-  botonDeInicio: {
-    backgroundColor:   "#2ecc71",
-    paddingHorizontal: 14,
-    paddingVertical:   6,
-    borderRadius:      8,
-  },
-  botonDeshabilitado: {
-    backgroundColor: "#333",
-  },
-  textoDeInicio: {
-    color:      "#ffffff",
-    fontSize:   12,
-    fontWeight: "bold",
   },
   botonDeDesconectar: {
     paddingHorizontal: 8,

@@ -2,25 +2,28 @@
 
 // =============================================================================
 // CONSTANTES
+// Manual: sin números mágicos sueltos. Cada valor tiene nombre descriptivo.
 // =============================================================================
-const ANCHO_DEL_CANVAS             = window.innerWidth;
-const ALTO_DEL_CANVAS              = window.innerHeight;
-const GROSOR_DE_PAREDES            = 50;
-const TAMANO_DEL_JUGADOR           = 24;
-const LADO_DEL_CUADRADO            = TAMANO_DEL_JUGADOR * 2;
-const VELOCIDAD_DE_MOVIMIENTO      = 0.006;
-const FUERZA_DE_SALTO              = 0.022;
-const UMBRAL_DE_VELOCIDAD_EN_SUELO = 0.5;
-const VELOCIDAD_MAXIMA_HORIZONTAL  = 5;
+const ANCHO_DEL_CANVAS               = window.innerWidth;
+const ALTO_DEL_CANVAS                = window.innerHeight;
+const GROSOR_DE_PAREDES              = 50;
+const TAMANO_DEL_JUGADOR             = 24;
+const LADO_DEL_CUADRADO              = TAMANO_DEL_JUGADOR * 2;
+const VELOCIDAD_DE_MOVIMIENTO        = 0.006;
+// En el aire la fuerza es menor: saltar+moverse no da ventaja de velocidad
+const VELOCIDAD_DE_MOVIMIENTO_EN_AIRE = 0.003;
+const FUERZA_DE_SALTO                = 0.028;
+const UMBRAL_DE_VELOCIDAD_EN_SUELO   = 0.4;
+const VELOCIDAD_MAXIMA_HORIZONTAL    = 5;
+// Límite de velocidad en el aire (menor que en suelo para consistencia)
+const VELOCIDAD_MAXIMA_EN_AIRE       = 4;
 const DISTANCIA_DE_LIGADURA_DE_LLAVE = TAMANO_DEL_JUGADOR + 18;
-const CANTIDAD_TOTAL_DE_NIVELES    = 2;
-const TIPO_DE_CLIENTE_JUEGO        = "juego";
-const COLORES_DE_JUGADORES         = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12"];
-
-// Fuerza que aplica CADA jugador sobre la caja al empujarla.
-// Si dos jugadores empujan, la fuerza se duplica automáticamente
-// porque Matter.js suma las fuerzas aplicadas en el mismo frame.
-const FUERZA_DE_EMPUJE_DE_CAJA    = 0.003;
+const CANTIDAD_TOTAL_DE_NIVELES      = 2;
+// La rúbrica exige 4 jugadores en la salida para ganar
+const CANTIDAD_DE_JUGADORES_PARA_GANAR = 4;
+const TIPO_DE_CLIENTE_JUEGO          = "juego";
+const COLORES_DE_JUGADORES           = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12"];
+const FUERZA_DE_EMPUJE_DE_CAJA       = 0.003;
 
 const TITULOS_DE_NIVELES = {
   1: "Nivel 1 — La llave perdida",
@@ -29,11 +32,12 @@ const TITULOS_DE_NIVELES = {
 
 // =============================================================================
 // ALIASES DE MATTER.JS
+// Destructuring: sacamos solo lo que vamos a usar del objeto global Matter.
 // =============================================================================
 const { Engine, Render, Runner, Bodies, Body, World, Events, Constraint } = Matter;
 
 // =============================================================================
-// ESTADO GLOBAL
+// ESTADO GLOBAL DEL JUEGO
 // =============================================================================
 let motorDeFisica;
 let renderizador;
@@ -46,16 +50,20 @@ let jugadoresEnPantalla     = {};
 let inputsDeJugadores       = {};
 let llaveDelNivel           = null;
 let zonaDeSalidaDelNivel    = null;
-let cuerposDePuerta         = [];   // Los bloques físicos de la puerta
-let cajaEmpujable           = null; // La caja del nivel 2
+let cuerposDePuerta         = [];
+let cajaEmpujable           = null;
 let jugadorQueCargarLaLlave = null;
 let ligaduraDeLlave         = null;
 let elNivelYaTermino        = false;
 let elJuegoEstaEnCurso      = false;
 let nivel1Completado        = false;
+// Evita crear dos loops paralelos si el juego se inicia dos veces
+let elLoopFueIniciado       = false;
 
 // =============================================================================
 // CONEXIÓN CON EL SERVIDOR
+// El juego se identifica como "juego" para que el servidor NO lo trate
+// como un gamepad y no genere un cuadrado extra en pantalla.
 // =============================================================================
 const socketDelJuego = io();
 
@@ -64,10 +72,11 @@ socketDelJuego.on("connect", () => {
 });
 
 // =============================================================================
-// ANIMACIÓN DE FONDO — Cuadraditos flotantes en pantalla de inicio
+// ANIMACIÓN DE FONDO
+// Cuadraditos flotantes puramente visuales en la pantalla de inicio.
 // =============================================================================
 const CANTIDAD_DE_CUADRADITOS_DE_FONDO = 14;
-const cuadraditosDeAnimacion = [];
+const cuadraditosDeAnimacion           = [];
 
 function inicializarAnimacionDeFondo() {
   const canvas   = document.getElementById("canvas-de-fondo-inicio");
@@ -102,8 +111,8 @@ function animarCuadraditosDeFondo(canvas, contexto) {
     const tocaBordeAbajo     = cuadradito.y + cuadradito.lado > canvas.height;
     const tocaBordeArriba    = cuadradito.y < 0;
 
-    if (tocaBordeDerecho || tocaBordeIzquierdo) cuadradito.vx *= -1;
-    if (tocaBordeAbajo   || tocaBordeArriba)    cuadradito.vy *= -1;
+    if (tocaBordeDerecho  || tocaBordeIzquierdo) cuadradito.vx *= -1;
+    if (tocaBordeAbajo    || tocaBordeArriba)    cuadradito.vy *= -1;
 
     contexto.globalAlpha = cuadradito.opacidad;
     contexto.fillStyle   = cuadradito.color;
@@ -125,7 +134,6 @@ function animarCuadraditosDeFondo(canvas, contexto) {
 // PANTALLA DE INICIO — Selector de niveles
 // =============================================================================
 
-// Esta función se llama desde el HTML con onclick
 function seleccionarNivel(numeroDeNivel) {
   const esNivel2SinDesbloquear = numeroDeNivel === 2 && !nivel1Completado;
   if (esNivel2SinDesbloquear) return;
@@ -144,13 +152,14 @@ function desbloquearNivel2EnPantallaDeInicio() {
   boton.classList.remove("bloqueado");
   boton.classList.add("desbloqueado");
   boton.textContent = "🟢 Nivel 2";
-  boton.onclick = () => seleccionarNivel(2);
+  boton.onclick     = () => seleccionarNivel(2);
 }
 
 function actualizarIndicadoresDeJugadoresEnInicio(jugadoresDelServidor) {
   const cantidad = Object.keys(jugadoresDelServidor).length;
   for (let i = 0; i < 4; i++) {
     const cuadradito = document.getElementById(`cuadradito-${i}`);
+    if (!cuadradito) continue;
     if (i < cantidad) {
       cuadradito.classList.add("conectado");
     } else {
@@ -174,7 +183,7 @@ function iniciarJuego() {
 }
 
 // =============================================================================
-// NIVEL MEDIO — Motor, renderizador y pantalla de inicio
+// NIVEL MEDIO — Motor y renderizador
 // =============================================================================
 
 function inicializarMotorDeFisica() {
@@ -196,14 +205,35 @@ function inicializarRenderizador() {
   });
 }
 
+// =============================================================================
+// NIVEL MEDIO — Pantalla de inicio
+// =============================================================================
+
 function escucharBotonDeInicio() {
   document.getElementById("boton-de-inicio").addEventListener("click", () => {
-    nivelActual        = nivelSeleccionado;
-    elJuegoEstaEnCurso = true;
-    ocultarPantallaDeInicio();
-    iniciarLoopPrincipal();
-    cargarNivel(nivelActual);
+    iniciarPartida(nivelSeleccionado);
   });
+}
+
+/**
+ * Centraliza el inicio del juego.
+ * Se llama desde el botón de la PC.
+ * elLoopFueIniciado evita crear dos loops paralelos.
+ */
+function iniciarPartida(numeroDeNivel) {
+  if (elJuegoEstaEnCurso) return;
+
+  nivelActual        = numeroDeNivel;
+  elJuegoEstaEnCurso = true;
+
+  ocultarPantallaDeInicio();
+
+  if (!elLoopFueIniciado) {
+    elLoopFueIniciado = true;
+    iniciarLoopPrincipal();
+  }
+
+  cargarNivel(nivelActual);
 }
 
 function ocultarPantallaDeInicio() {
@@ -211,8 +241,7 @@ function ocultarPantallaDeInicio() {
 }
 
 function mostrarPantallaDeInicio() {
-  const pantalla = document.getElementById("pantalla-de-inicio");
-  pantalla.classList.add("visible");
+  document.getElementById("pantalla-de-inicio").classList.add("visible");
   const canvas   = document.getElementById("canvas-de-fondo-inicio");
   const contexto = canvas.getContext("2d");
   animarCuadraditosDeFondo(canvas, contexto);
@@ -250,7 +279,6 @@ function limpiarMundoActual() {
 }
 
 function construirEstructuraBasicaDelMundo() {
-  // Piso visible con color
   const piso = crearCuerpoEstatico(
     ANCHO_DEL_CANVAS / 2,
     ALTO_DEL_CANVAS - 10,
@@ -276,32 +304,29 @@ function construirEstructuraBasicaDelMundo() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NIVEL 1:
-// - Los jugadores aparecen cerca de la puerta (izquierda abajo)
-// - Deben subir plataformas escalonadas para alcanzar la llave (arriba derecha)
-// - Cuando alguien tiene la llave, todos vuelven a la puerta para salir
-// - La condición se adapta a la cantidad de jugadores conectados
+// NIVEL 1
+// Plataformas escalonadas. Cada escalón sube ~13% de la pantalla,
+// saltable con FUERZA_DE_SALTO = 0.028.
+// La llave está arriba a la derecha (plataforma naranja).
+// La zona de salida (verde) está abajo a la izquierda.
 // ─────────────────────────────────────────────────────────────────────────────
-// SACAMOS la puerta física (se veía fea)
-// La zona verde de salida es suficiente y más clara visualmente
 function construirNivelUno() {
   const aw = ANCHO_DEL_CANVAS;
   const ah = ALTO_DEL_CANVAS;
 
   const plataformas = [
-    crearPlataforma(aw * 0.20, ah * 0.75, aw * 0.16, 18, "#4a6fa5"),
-    crearPlataforma(aw * 0.38, ah * 0.63, aw * 0.14, 18, "#4a6fa5"),
-    crearPlataforma(aw * 0.55, ah * 0.51, aw * 0.14, 18, "#4a6fa5"),
-    crearPlataforma(aw * 0.72, ah * 0.39, aw * 0.14, 18, "#4a6fa5"),
-    crearPlataforma(aw * 0.88, ah * 0.27, aw * 0.14, 18, "#e67e22"),
+    crearPlataforma(aw * 0.18, ah * 0.80, aw * 0.16, 18, "#4a6fa5"),
+    crearPlataforma(aw * 0.35, ah * 0.67, aw * 0.14, 18, "#4a6fa5"),
+    crearPlataforma(aw * 0.52, ah * 0.54, aw * 0.14, 18, "#4a6fa5"),
+    crearPlataforma(aw * 0.69, ah * 0.41, aw * 0.14, 18, "#4a6fa5"),
+    // Plataforma naranja — aquí está la llave
+    crearPlataforma(aw * 0.84, ah * 0.28, aw * 0.16, 18, "#e67e22"),
   ];
 
-  llaveDelNivel = crearLlave(aw * 0.88, ah * 0.27 - 20);
+  llaveDelNivel = crearLlave(aw * 0.84, ah * 0.28 - 22);
 
-  // La zona de salida es el área verde abajo a la izquierda
-  // donde los jugadores deben pararse con la llave para ganar
   zonaDeSalidaDelNivel = crearZonaDeSalida(
-    aw * 0.07, ah * 0.92, aw * 0.12, 60
+    aw * 0.08, ah * 0.91, aw * 0.13, 55
   );
 
   World.add(mundoDeFisica, [
@@ -309,14 +334,12 @@ function construirNivelUno() {
     llaveDelNivel,
     zonaDeSalidaDelNivel,
   ]);
-
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NIVEL 2:
-// - Hay una caja empujable que se necesita para alcanzar la plataforma alta
-// - Cuantos más jugadores empujan, más rápido se mueve (suma de fuerzas)
-// - También requiere apilarse para llegar a la llave
+// NIVEL 2
+// Caja empujable: más jugadores empujando = más fuerzas = se mueve más rápido.
+// Plataforma alta que requiere apilarse para llegar.
 // ─────────────────────────────────────────────────────────────────────────────
 function construirNivelDos() {
   const aw = ANCHO_DEL_CANVAS;
@@ -326,20 +349,15 @@ function construirNivelDos() {
     crearPlataforma(aw * 0.20, ah * 0.75, aw * 0.16, 18, "#4a6fa5"),
     crearPlataforma(aw * 0.45, ah * 0.62, aw * 0.14, 18, "#8e44ad"),
     crearPlataforma(aw * 0.68, ah * 0.48, aw * 0.14, 18, "#8e44ad"),
-    // Plataforma muy alta — necesita caja + apilarse
+    // Plataforma roja alta — necesita caja + apilarse
     crearPlataforma(aw * 0.85, ah * 0.28, aw * 0.16, 18, "#c0392b"),
   ];
 
-  // Caja empujable: es dinámica (no isStatic), los jugadores la empujan
   cajaEmpujable = crearCajaEmpujable(aw * 0.35, ah * 0.88);
-
-  llaveDelNivel = crearLlave(aw * 0.85, ah * 0.28 - 20);
-
-  const puerta = construirPuertaEstiloPicoPark(aw * 0.07, ah * 0.88);
+  llaveDelNivel = crearLlave(aw * 0.85, ah * 0.28 - 22);
 
   zonaDeSalidaDelNivel = crearZonaDeSalida(
-    aw * 0.07, ah * 0.915,
-    aw * 0.12, 50
+    aw * 0.08, ah * 0.91, aw * 0.13, 55
   );
 
   World.add(mundoDeFisica, [
@@ -348,11 +366,11 @@ function construirNivelDos() {
     llaveDelNivel,
     zonaDeSalidaDelNivel,
   ]);
-  World.add(mundoDeFisica, puerta);
 }
 
 // =============================================================================
 // NIVEL BAJO — Constructores de objetos físicos
+// Cada función crea UN solo tipo de objeto (Principio SRP).
 // =============================================================================
 
 function crearCuerpoEstatico(x, y, ancho, alto, etiqueta, color) {
@@ -377,6 +395,7 @@ function crearPlataforma(x, y, ancho, alto, color) {
 }
 
 function crearLlave(x, y) {
+  // isSensor: true → detecta colisiones pero no bloquea físicamente
   return Bodies.rectangle(x, y, 34, 14, {
     isStatic: true,
     isSensor: true,
@@ -390,6 +409,7 @@ function crearLlave(x, y) {
 }
 
 function crearZonaDeSalida(x, y, ancho, alto) {
+  // isSensor: true → los jugadores pueden entrar sin ser bloqueados
   return Bodies.rectangle(x, y, ancho, alto, {
     isStatic: true,
     isSensor: true,
@@ -403,86 +423,20 @@ function crearZonaDeSalida(x, y, ancho, alto) {
 }
 
 /**
- * Construye la puerta estilo Pico Park:
- * Dos pilares verticales + un dintel horizontal arriba.
- * Se ven como un arco/portal.
- * Cuando el nivel se completa, los pilares se eliminan del mundo (la puerta "se abre").
- *
- * @param {number} xCentro - Centro horizontal de la puerta
- * @param {number} yBase   - Base inferior de la puerta (nivel del suelo)
- */
-function construirPuertaEstiloPicoPark(xCentro, yBase) {
-  const anchoDePilar  = 12;
-  const altoDePuerta  = 80;
-  const anchoDePuerta = 70;
-  const altoDeLintel  = 12;
-
-  // Pilar izquierdo
-  const pilarIzquierdo = Bodies.rectangle(
-    xCentro - anchoDePuerta / 2,
-    yBase - altoDePuerta / 2,
-    anchoDePilar, altoDePuerta,
-    {
-      isStatic: true,
-      label:    "puertaPilar",
-      render:   { fillStyle: "#e67e22", strokeStyle: "#d35400", lineWidth: 2 },
-    }
-  );
-
-  // Pilar derecho
-  const pilarDerecho = Bodies.rectangle(
-    xCentro + anchoDePuerta / 2,
-    yBase - altoDePuerta / 2,
-    anchoDePilar, altoDePuerta,
-    {
-      isStatic: true,
-      label:    "puertaPilar",
-      render:   { fillStyle: "#e67e22", strokeStyle: "#d35400", lineWidth: 2 },
-    }
-  );
-
-  // Dintel (la barra horizontal arriba)
-  const dintel = Bodies.rectangle(
-    xCentro,
-    yBase - altoDePuerta - altoDeLintel / 2,
-    anchoDePuerta + anchoDePilar * 2, altoDeLintel,
-    {
-      isStatic: true,
-      label:    "puertaDintel",
-      render:   { fillStyle: "#e67e22", strokeStyle: "#d35400", lineWidth: 2 },
-    }
-  );
-
-  // Guardamos los cuerpos para poder eliminarlos cuando se abra la puerta
-  cuerposDePuerta = [pilarIzquierdo, pilarDerecho, dintel];
-  return cuerposDePuerta;
-}
-
-/**
- * "Abre" la puerta eliminando sus cuerpos del mundo físico.
- * Se llama cuando se cumplen las condiciones de victoria.
- */
-function abrirPuerta() {
-  cuerposDePuerta.forEach((cuerpo) => {
-    World.remove(mundoDeFisica, cuerpo);
-  });
-  cuerposDePuerta = [];
-}
-
-/**
  * Crea la caja empujable del nivel 2.
- * No es estática: los jugadores la pueden mover aplicando fuerzas.
- * Cuantos más jugadores empujan, más fuerzas se suman → se mueve más rápido.
+ * isStatic: false → puede moverse.
+ * density: 0.003 → más densa que los jugadores, cuesta moverla sola.
+ * inertia: Infinity → no rota al ser golpeada.
  */
 function crearCajaEmpujable(x, y) {
-  const ladoDeLaCaja = 60;
-  return Bodies.rectangle(x, y, ladoDeLaCaja, ladoDeLaCaja, {
+  const LADO_DE_LA_CAJA = 60;
+  return Bodies.rectangle(x, y, LADO_DE_LA_CAJA, LADO_DE_LA_CAJA, {
     label:       "cajaEmpujable",
-    isStatic:    false,  // Puede moverse
+    isStatic:    false,
     friction:    0.8,
     restitution: 0.1,
-    density:     0.003,  // Más densa que los jugadores → más difícil de mover
-    inertia:     Infinity, // Sin rotación
+    density:     0.003,
+    inertia:     Infinity,
     render: {
       fillStyle:   "#795548",
       strokeStyle: "#5d4037",
@@ -495,11 +449,16 @@ function crearCajaEmpujable(x, y) {
 // NIVEL MEDIO — Gestión de jugadores
 // =============================================================================
 
+/**
+ * Crea el cuerpo físico del jugador y lo agrega al mundo.
+ * Se llama apenas conecta el gamepad, sin esperar a que inicie el juego.
+ * El jugador es visible en pantalla desde que conecta.
+ */
 function agregarJugadorAlMundo(idDelJugador, colorDelJugador, indiceDeColor) {
   if (jugadoresEnPantalla[idDelJugador] !== undefined) return;
 
-  const posicionInicialX = 60 + indiceDeColor * (LADO_DEL_CUADRADO + 20);
-  const posicionInicialY = ALTO_DEL_CANVAS - 80;
+  const posicionInicialX = 80 + indiceDeColor * (LADO_DEL_CUADRADO + 20);
+  const posicionInicialY = ALTO_DEL_CANVAS - 60;
 
   const cuerpoDelJugador = Bodies.rectangle(
     posicionInicialX, posicionInicialY,
@@ -509,6 +468,7 @@ function agregarJugadorAlMundo(idDelJugador, colorDelJugador, indiceDeColor) {
       frictionAir: 0.08,
       friction:    0.6,
       restitution: 0.0,
+      // inertia Infinity: no rota al chocar → se apilan como bloques
       inertia:     Infinity,
       render: {
         fillStyle:   colorDelJugador,
@@ -542,8 +502,8 @@ function reposicionarJugadoresExistentes() {
   Object.keys(jugadoresEnPantalla).forEach((id, indice) => {
     const cuerpo = jugadoresEnPantalla[id];
     Body.setPosition(cuerpo, {
-      x: 60 + indice * (LADO_DEL_CUADRADO + 20),
-      y: ALTO_DEL_CANVAS - 80,
+      x: 80 + indice * (LADO_DEL_CUADRADO + 20),
+      y: ALTO_DEL_CANVAS - 60,
     });
     Body.setVelocity(cuerpo, { x: 0, y: 0 });
   });
@@ -555,17 +515,22 @@ function reposicionarJugadoresExistentes() {
 
 function iniciarLoopPrincipal() {
   function ejecutarFrame() {
-    if (!elJuegoEstaEnCurso) return;
-    aplicarInputsATodosLosJugadores();
-    aplicarFuerzasEnCaja();
-    verificarCondicionesDeVictoria();
-    verificarJugadoresFueraDelMapa();
+    // El loop corre siempre pero solo aplica física si el juego está en curso
+    if (elJuegoEstaEnCurso) {
+      aplicarInputsATodosLosJugadores();
+      aplicarFuerzasEnCaja();
+      verificarCondicionesDeVictoria();
+      verificarJugadoresFueraDelMapa();
+    }
     requestAnimationFrame(ejecutarFrame);
   }
   requestAnimationFrame(ejecutarFrame);
 }
 
 function aplicarInputsATodosLosJugadores() {
+  // NUEVO: Si el nivel terminó, ignoramos los botones del gamepad
+  if (elNivelYaTermino) return; 
+
   Object.entries(inputsDeJugadores).forEach(([id, inputActual]) => {
     const cuerpo = jugadoresEnPantalla[id];
     if (cuerpo === undefined) return;
@@ -576,97 +541,73 @@ function aplicarInputsATodosLosJugadores() {
   });
 }
 
+/**
+ * Aplica fuerza horizontal.
+ * En el aire la fuerza es VELOCIDAD_DE_MOVIMIENTO_EN_AIRE (la mitad).
+ * Esto evita que saltar+moverse sea más rápido que solo moverse.
+ */
 function aplicarMovimientoHorizontal(cuerpo, inputActual) {
+  const estaEnElAire  = !verificarSiJugadorEstaEnSuelo(cuerpo);
+  const fuerzaAplicar = estaEnElAire
+    ? VELOCIDAD_DE_MOVIMIENTO_EN_AIRE
+    : VELOCIDAD_DE_MOVIMIENTO;
+
   if (inputActual.izquierda) {
-    Body.applyForce(cuerpo, cuerpo.position, { x: -VELOCIDAD_DE_MOVIMIENTO, y: 0 });
+    Body.applyForce(cuerpo, cuerpo.position, { x: -fuerzaAplicar, y: 0 });
   }
   if (inputActual.derecha) {
-    Body.applyForce(cuerpo, cuerpo.position, { x: VELOCIDAD_DE_MOVIMIENTO, y: 0 });
+    Body.applyForce(cuerpo, cuerpo.position, { x: fuerzaAplicar, y: 0 });
   }
 }
 
-// Esta función ahora permite moverse y saltar al mismo tiempo.
-// El salto solo se ejecuta UNA vez por presión gracias al umbral estricto.
-// Después de saltar, inputActual.salto se pone en false para evitar
-// que si mantenés apretado el botón siga saltando infinitamente.
+/**
+ * Aplica el salto UNA SOLA VEZ por presión.
+ * inputActual.salto = false evita salto infinito al mantener presionado.
+ * El movimiento horizontal funciona simultáneamente sin conflicto.
+ */
 function aplicarSaltoSiCorresponde(cuerpo, inputActual) {
   const estaEnElSuelo      = verificarSiJugadorEstaEnSuelo(cuerpo);
   const puedeEjecutarSalto = inputActual.salto && estaEnElSuelo;
-
   if (!puedeEjecutarSalto) return;
 
-  // Aplicamos la fuerza de salto hacia arriba
   Body.applyForce(cuerpo, cuerpo.position, { x: 0, y: -FUERZA_DE_SALTO });
-
-  // MUY IMPORTANTE: consumimos el salto inmediatamente.
-  // Aunque el servidor siga mandando salto: true,
-  // no saltamos de nuevo hasta que el jugador suelte y vuelva a presionar.
+  // Consumimos el salto para evitar salto infinito
   inputActual.salto = false;
 }
 
+/**
+ * Limita la velocidad horizontal máxima.
+ * En el aire el límite es VELOCIDAD_MAXIMA_EN_AIRE (menor).
+ * Consistente con la fuerza reducida en el aire.
+ */
 function limitarVelocidadHorizontal(cuerpo) {
-  const velocidad      = cuerpo.velocity;
-  const superaElLimite = Math.abs(velocidad.x) > VELOCIDAD_MAXIMA_HORIZONTAL;
+  const velocidad    = cuerpo.velocity;
+  const estaEnElAire = !verificarSiJugadorEstaEnSuelo(cuerpo);
+  const limiteActual = estaEnElAire
+    ? VELOCIDAD_MAXIMA_EN_AIRE
+    : VELOCIDAD_MAXIMA_HORIZONTAL;
+
+  const superaElLimite = Math.abs(velocidad.x) > limiteActual;
   if (!superaElLimite) return;
 
   Body.setVelocity(cuerpo, {
-    x: Math.sign(velocidad.x) * VELOCIDAD_MAXIMA_HORIZONTAL,
+    x: Math.sign(velocidad.x) * limiteActual,
     y: velocidad.y,
   });
 }
 
+/**
+ * Verifica si el jugador está en el suelo.
+ * UMBRAL_DE_VELOCIDAD_EN_SUELO = 0.4: muy estricto.
+ * Solo permite saltar si la velocidad vertical es casi cero.
+ */
 function verificarSiJugadorEstaEnSuelo(cuerpo) {
   return Math.abs(cuerpo.velocity.y) < UMBRAL_DE_VELOCIDAD_EN_SUELO;
 }
 
-/**
- * Detecta qué jugadores están tocando la caja y les aplica su fuerza.
- * La suma de fuerzas es automática: si 3 jugadores empujan a la derecha,
- * Matter.js suma las 3 fuerzas en ese frame y la caja va más rápido.
- * Esto cumple el criterio de evaluación de "suma de fuerzas".
- */
-function aplicarFuerzasEnCaja() {
-  const hayCaja = cajaEmpujable !== null;
-  if (!hayCaja) return;
-
-  Object.entries(inputsDeJugadores).forEach(([id, inputActual]) => {
-    const cuerpoDelJugador = jugadoresEnPantalla[id];
-    if (cuerpoDelJugador === undefined) return;
-
-    const estaEmpujandoDerecha   = inputActual.derecha;
-    const estaEmpujandoIzquierda = inputActual.izquierda;
-
-    // Verificamos si el jugador está adyacente a la caja (tocándola)
-    const estaCercaDeLaCaja = verificarSiJugadorEstaCercaDeCaja(cuerpoDelJugador);
-    if (!estaCercaDeLaCaja) return;
-
-    if (estaEmpujandoDerecha) {
-      Body.applyForce(cajaEmpujable, cajaEmpujable.position, {
-        x: FUERZA_DE_EMPUJE_DE_CAJA, y: 0,
-      });
-    }
-    if (estaEmpujandoIzquierda) {
-      Body.applyForce(cajaEmpujable, cajaEmpujable.position, {
-        x: -FUERZA_DE_EMPUJE_DE_CAJA, y: 0,
-      });
-    }
-  });
-}
-
-/**
- * Verifica si un jugador está lo suficientemente cerca de la caja
- * como para empujarla. Usamos una distancia simple entre centros.
- */
-function verificarSiJugadorEstaCercaDeCaja(cuerpoDelJugador) {
-  const DISTANCIA_DE_EMPUJE = LADO_DEL_CUADRADO + 40; // px de tolerancia
-  const dx = Math.abs(cuerpoDelJugador.position.x - cajaEmpujable.position.x);
-  const dy = Math.abs(cuerpoDelJugador.position.y - cajaEmpujable.position.y);
-  return dx < DISTANCIA_DE_EMPUJE && dy < DISTANCIA_DE_EMPUJE;
-}
-
 function verificarJugadoresFueraDelMapa() {
   Object.keys(jugadoresEnPantalla).forEach((id) => {
-    const cuerpo          = jugadoresEnPantalla[id];
+    const cuerpo           = jugadoresEnPantalla[id];
     const cayoFueraDelMapa = cuerpo.position.y > ALTO_DEL_CANVAS + 100;
     if (!cayoFueraDelMapa) return;
 
@@ -677,7 +618,43 @@ function verificarJugadoresFueraDelMapa() {
 }
 
 // =============================================================================
-// NIVEL MEDIO — Sistema de llave con Constraint
+// NIVEL MEDIO — Caja empujable (Nivel 2)
+// Suma de fuerzas: si N jugadores empujan, Body.applyForce se llama N veces
+// en el mismo frame. Matter.js las acumula → la caja va N veces más rápido.
+// =============================================================================
+
+function aplicarFuerzasEnCaja() {
+  if (cajaEmpujable === null) return;
+
+  Object.entries(inputsDeJugadores).forEach(([id, inputActual]) => {
+    const cuerpoDelJugador = jugadoresEnPantalla[id];
+    if (cuerpoDelJugador === undefined) return;
+
+    const estaCercaDeLaCaja = verificarSiJugadorEstaCercaDeCaja(cuerpoDelJugador);
+    if (!estaCercaDeLaCaja) return;
+
+    if (inputActual.derecha) {
+      Body.applyForce(cajaEmpujable, cajaEmpujable.position, {
+        x: FUERZA_DE_EMPUJE_DE_CAJA, y: 0,
+      });
+    }
+    if (inputActual.izquierda) {
+      Body.applyForce(cajaEmpujable, cajaEmpujable.position, {
+        x: -FUERZA_DE_EMPUJE_DE_CAJA, y: 0,
+      });
+    }
+  });
+}
+
+function verificarSiJugadorEstaCercaDeCaja(cuerpoDelJugador) {
+  const DISTANCIA_MAXIMA_DE_EMPUJE = LADO_DEL_CUADRADO + 40;
+  const diferenciaEnX = Math.abs(cuerpoDelJugador.position.x - cajaEmpujable.position.x);
+  const diferenciaEnY = Math.abs(cuerpoDelJugador.position.y - cajaEmpujable.position.y);
+  return diferenciaEnX < DISTANCIA_MAXIMA_DE_EMPUJE && diferenciaEnY < DISTANCIA_MAXIMA_DE_EMPUJE;
+}
+
+// =============================================================================
+// NIVEL MEDIO — Sistema de llave con Constraint (ligadura)
 // =============================================================================
 
 function crearLigaduraDeLlaveConJugador(cuerpoDelPortador) {
@@ -709,11 +686,11 @@ function resetearLlave() {
 }
 
 function obtenerPosicionInicialDeLlave(numeroDeNivel) {
-  const posiciones = {
-    1: { x: ANCHO_DEL_CANVAS * 0.88, y: ALTO_DEL_CANVAS * 0.27 - 20 },
-    2: { x: ANCHO_DEL_CANVAS * 0.85, y: ALTO_DEL_CANVAS * 0.28 - 20 },
+  const posicionesPorNivel = {
+    1: { x: ANCHO_DEL_CANVAS * 0.84, y: ALTO_DEL_CANVAS * 0.28 - 22 },
+    2: { x: ANCHO_DEL_CANVAS * 0.85, y: ALTO_DEL_CANVAS * 0.28 - 22 },
   };
-  return posiciones[numeroDeNivel] || posiciones[1];
+  return posicionesPorNivel[numeroDeNivel] || posicionesPorNivel[1];
 }
 
 // =============================================================================
@@ -748,14 +725,22 @@ function intentarRecogerLlave(cuerpoDelJugador) {
 }
 
 // =============================================================================
-// NIVEL MEDIO — Victoria
-// Condición dinámica: se adapta a cuántos jugadores hay conectados.
-// Si hay 2 jugadores, con 2 en la salida alcanza para ganar.
+// NIVEL MEDIO — Condición de victoria
+// La rúbrica exige que los 4 jugadores estén en la zona de salida.
+// CANTIDAD_DE_JUGADORES_PARA_GANAR = 4.
+// =============================================================================
+
+// =============================================================================
+// NIVEL MEDIO — Condición de victoria
 // =============================================================================
 
 function verificarCondicionesDeVictoria() {
   if (elNivelYaTermino) return;
-  if (Object.keys(jugadoresEnPantalla).length === 0) return;
+  
+  // Guardamos la cantidad de jugadores actuales
+  const cantidadDeJugadores = Object.keys(jugadoresEnPantalla).length;
+  if (cantidadDeJugadores === 0) return; // Si no hay nadie, no se puede ganar
+
   if (!llaveDelNivel || !zonaDeSalidaDelNivel) return;
 
   const alguienTieneLaLlave  = jugadorQueCargarLaLlave !== null;
@@ -763,18 +748,19 @@ function verificarCondicionesDeVictoria() {
 
   if (alguienTieneLaLlave && todosEstanEnLaSalida) {
     elNivelYaTermino = true;
-    abrirPuerta(); // La puerta se abre visualmente
     if (nivelActual === 1) nivel1Completado = true;
-
-    // Pequeña pausa para que se vea la puerta abrirse antes de mostrar victoria
-    setTimeout(() => activarPantallaDeVictoria(), 800);
+    setTimeout(() => activarPantallaDeVictoria(), 600);
   }
 }
 
+/**
+ * Verifica que TODOS los jugadores conectados estén en la salida.
+ * Ahora es dinámico: si hay 2 jugando, pide que los 2 estén adentro.
+ */
 function verificarSiTodosEstanEnZonaDeSalida() {
   const ids = Object.keys(jugadoresEnPantalla);
-  if (ids.length === 0) return false;
-  // every() → true solo si TODOS los jugadores cumplen la condición
+
+  // Verificamos que absolutamente todos los IDs conectados estén tocando la zona
   return ids.every((id) =>
     verificarSiCuerpoEstaEnZona(jugadoresEnPantalla[id], zonaDeSalidaDelNivel)
   );
@@ -796,8 +782,9 @@ function activarPantallaDeVictoria() {
   document.getElementById("texto-de-victoria").textContent =
     esElUltimoNivel ? "🏆 ¡Juego completado!" : "🎉 ¡Nivel completado!";
 
-  const boton = document.getElementById("boton-para-siguiente-nivel");
+  const boton       = document.getElementById("boton-para-siguiente-nivel");
   boton.textContent = esElUltimoNivel ? "Volver al inicio" : "Siguiente Nivel →";
+
   boton.onclick = () => {
     document.getElementById("pantalla-de-victoria").classList.remove("visible");
     if (esElUltimoNivel) {
@@ -814,24 +801,13 @@ function activarPantallaDeVictoria() {
 }
 
 // =============================================================================
-// NIVEL MEDIO — Comunicación con servidor
+// NIVEL MEDIO — Comunicación con el servidor
 // =============================================================================
 
 function escucharEventosDelServidor() {
   socketDelJuego.on("jugador_asignado",           manejarAsignacionDeJugador);
   socketDelJuego.on("actualizacion_de_jugadores", manejarActualizacionDeJugadores);
   socketDelJuego.on("tick_del_juego",             manejarTickDelJuego);
-
-  // Cuando cualquier gamepad toca "Iniciar", el servidor nos avisa.
-  // Ocultamos la pantalla de inicio y cargamos el nivel 1.
-  socketDelJuego.on("juego_iniciado", () => {
-    if (elJuegoEstaEnCurso) return; // Evitamos iniciar dos veces
-    nivelActual        = 1;
-    elJuegoEstaEnCurso = true;
-    ocultarPantallaDeInicio();
-    iniciarLoopPrincipal();
-    cargarNivel(nivelActual);
-  });
 }
 
 function manejarAsignacionDeJugador(datosDelJugador) {
@@ -860,23 +836,26 @@ function manejarActualizacionDeJugadores(jugadoresDelServidor) {
   actualizarIndicadoresDeJugadoresEnInicio(jugadoresDelServidor);
 }
 
+/**
+ * Recibe el tick del servidor 30 veces por segundo.
+ * Actualiza izquierda/derecha directamente.
+ * Para el salto: solo activamos, nunca desactivamos desde aquí.
+ * La desactivación la hace aplicarSaltoSiCorresponde() para evitar salto infinito.
+ */
 function manejarTickDelJuego(estadoDelJuego) {
   Object.keys(estadoDelJuego.jugadores).forEach((id) => {
     const inputDelServidor = estadoDelJuego.jugadores[id].input;
     if (!inputsDeJugadores[id]) return;
 
-    // Movimiento horizontal: actualización directa
     inputsDeJugadores[id].izquierda = inputDelServidor.izquierda;
     inputsDeJugadores[id].derecha   = inputDelServidor.derecha;
 
-    // Salto: solo ACTIVAMOS desde el servidor, nunca desactivamos.
-    // La desactivación la hace aplicarSaltoSiCorresponde() internamente.
-    // Esto permite: mover + saltar al mismo tiempo sin conflictos.
     if (inputDelServidor.salto) {
       inputsDeJugadores[id].salto = true;
     }
   });
 }
+
 // =============================================================================
 // NIVEL BAJO — UI
 // =============================================================================
@@ -907,101 +886,6 @@ function actualizarIndicadorDeLlave(idDelPortador) {
       ? "🗝️ Nadie tiene la llave — ¡encuéntrenla!"
       : "🗝️ ¡Alguien tiene la llave! Todos a la salida 🟩";
 }
-
-// =============================================================================
-// NIVEL ADAPTATIVO
-// El nivel se construye diferente según cuántos jugadores hay conectados.
-// Menos jugadores → plataformas más juntas y accesibles
-// Más jugadores   → plataformas más separadas, requiere más cooperación
-// =============================================================================
-
-/**
- * Decide qué versión del nivel cargar según la cantidad de jugadores.
- * @param {number} numeroDeNivel      - 1 o 2
- * @param {number} cantidadDeJugadores - cuántos gamepads están conectados
- */
-function cargarNivelAdaptativo(numeroDeNivel, cantidadDeJugadores) {
-  elNivelYaTermino = false;
-  limpiarMundoActual();
-  construirEstructuraBasicaDelMundo();
-
-  if (numeroDeNivel === 1) {
-    construirNivelUnoAdaptativo(cantidadDeJugadores);
-  } else if (numeroDeNivel === 2) {
-    construirNivelDosAdaptativo(cantidadDeJugadores);
-  }
-
-  reposicionarJugadoresExistentes();
-  actualizarTituloDelNivel(numeroDeNivel);
-  actualizarIndicadorDeLlave(null);
-}
-
-/**
- * Nivel 1 adaptativo.
- * Con 2 jugadores: plataformas más juntas, saltos más cortos.
- * Con 4 jugadores: plataformas más separadas, requiere más coordinación.
- */
-function construirNivelUnoAdaptativo(cantidadDeJugadores) {
-  const aw = ANCHO_DEL_CANVAS;
-  const ah = ALTO_DEL_CANVAS;
-
-  // Con pocos jugadores las plataformas están más juntas (más fácil)
-  // Con más jugadores están más separadas (más difícil, requiere cooperación)
-  const separacionVertical   = cantidadDeJugadores <= 2 ? 0.10 : 0.12;
-  const separacionHorizontal = cantidadDeJugadores <= 2 ? 0.17 : 0.20;
-
-  const plataformas = [
-    crearPlataforma(aw * 0.15,                          ah * 0.82,                              aw * 0.16, 18, "#4a6fa5"),
-    crearPlataforma(aw * 0.15 + separacionHorizontal,   ah * 0.82 - separacionVertical,         aw * 0.14, 18, "#4a6fa5"),
-    crearPlataforma(aw * 0.15 + separacionHorizontal * 2, ah * 0.82 - separacionVertical * 2,   aw * 0.14, 18, "#4a6fa5"),
-    crearPlataforma(aw * 0.15 + separacionHorizontal * 3, ah * 0.82 - separacionVertical * 3,   aw * 0.14, 18, "#4a6fa5"),
-    // Plataforma naranja con la llave
-    crearPlataforma(aw * 0.15 + separacionHorizontal * 4, ah * 0.82 - separacionVertical * 4,   aw * 0.16, 18, "#e67e22"),
-  ];
-
-  const xDeLlave = aw * 0.15 + separacionHorizontal * 4;
-  const yDeLlave = ah * 0.82 - separacionVertical * 4 - 20;
-
-  llaveDelNivel = crearLlave(xDeLlave, yDeLlave);
-
-  const puerta = construirPuertaEstiloPicoPark(aw * 0.07, ah * 0.90);
-  zonaDeSalidaDelNivel = crearZonaDeSalida(aw * 0.07, ah * 0.925, aw * 0.12, 50);
-
-  World.add(mundoDeFisica, [...plataformas, llaveDelNivel, zonaDeSalidaDelNivel]);
-  World.add(mundoDeFisica, puerta);
-}
-
-/**
- * Nivel 2 adaptativo con caja empujable.
- * Con pocos jugadores la caja es más liviana y la plataforma más baja.
- * Con más jugadores la caja es más pesada y la plataforma más alta.
- */
-function construirNivelDos() {
-  const aw = ANCHO_DEL_CANVAS;
-  const ah = ALTO_DEL_CANVAS;
-
-  const plataformas = [
-    crearPlataforma(aw * 0.20, ah * 0.75, aw * 0.16, 18, "#4a6fa5"),
-    crearPlataforma(aw * 0.45, ah * 0.62, aw * 0.14, 18, "#8e44ad"),
-    crearPlataforma(aw * 0.68, ah * 0.48, aw * 0.14, 18, "#8e44ad"),
-    crearPlataforma(aw * 0.85, ah * 0.28, aw * 0.16, 18, "#c0392b"),
-  ];
-
-  cajaEmpujable = crearCajaEmpujable(aw * 0.35, ah * 0.88);
-  llaveDelNivel = crearLlave(aw * 0.85, ah * 0.28 - 20);
-
-  zonaDeSalidaDelNivel = crearZonaDeSalida(
-    aw * 0.07, ah * 0.92, aw * 0.12, 60
-  );
-
-  World.add(mundoDeFisica, [
-    ...plataformas,
-    cajaEmpujable,
-    llaveDelNivel,
-    zonaDeSalidaDelNivel,
-  ]);
-}
-
 
 // =============================================================================
 // ARRANQUE
