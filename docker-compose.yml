@@ -1,0 +1,7 @@
+services:
+  picopark:
+    build: ./Game
+    container_name: picopark
+    ports:
+      - "3001:3000"
+    restart: unless-stopped
