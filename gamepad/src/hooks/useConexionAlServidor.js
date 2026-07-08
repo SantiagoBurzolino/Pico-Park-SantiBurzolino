@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 
-const PUERTO_DEL_SERVIDOR = 3000;
+const PUERTO_DEL_SERVIDOR = 3005;
 
 export function useConexionAlServidor(ipDelServidor) {
   const referenciaAlSocket = useRef(null);
